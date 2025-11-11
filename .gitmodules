@@ -1,4 +1,4 @@
-[submodule "swift-client"]
+[submodule "swift"]
 	path = swift
 	url = https://github.com/dotnet/signalr-client-swift
 	branch = dev
