@@ -55,15 +55,19 @@ cp -r "$REPO_ROOT/java/target/" "$OUTPUT_DIR/java/"
 cp    "$REPO_ROOT/java/pom.xml" "$OUTPUT_DIR/java/"
 ok "Java tests → $OUTPUT_DIR/java/"
 
-# ── Swift: build tests ──────────────────────────────────────────────────────
-log "Building Swift tests..."
-(
-  cd "$REPO_ROOT/swift"
-  swift build --build-tests
-)
-mkdir -p "$OUTPUT_DIR/swift"
-cp -r "$REPO_ROOT/swift/.build/" "$OUTPUT_DIR/swift/.build"
-ok "Swift tests → $OUTPUT_DIR/swift/"
+# ── Swift: build tests (macOS only – Linux FoundationNetworking lacks async URLSession APIs)
+if [[ "$(uname)" == "Darwin" ]]; then
+  log "Building Swift tests..."
+  (
+    cd "$REPO_ROOT/swift"
+    swift build --build-tests
+  )
+  mkdir -p "$OUTPUT_DIR/swift"
+  cp -r "$REPO_ROOT/swift/.build/" "$OUTPUT_DIR/swift/.build"
+  ok "Swift tests → $OUTPUT_DIR/swift/"
+else
+  log "Skipping Swift build (not supported on Linux – requires macOS)"
+fi
 
 # ── Copy run script into artifact package ────────────────────────────────────
 log "Bundling run-from-artifacts.sh..."

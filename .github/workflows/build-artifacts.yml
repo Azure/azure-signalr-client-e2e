@@ -41,10 +41,8 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '5.10'
+      # Swift client requires macOS (URLSession async APIs not available on Linux).
+      # Swift build is skipped on ubuntu-latest; add a macOS job if needed later.
 
       - name: Build all artifacts
         run: |
