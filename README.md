@@ -2,12 +2,11 @@
 
 This repository hosts multiple languages client E2E tests for Azure SignalR. It helps verify all language clients work correctly with Azure SignalR Service in a single pass.
 
-- Supported clients: [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/)
-- Unsupported clients (in-progress): [C++](https://github.com/aspnet/SignalR-Client-Cpp), [C#](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/csharp)
+- Supported clients: [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/), [.NET](https://github.com/Azure/azure-signalr)
 
 ## Cloning with submodules
 
-The Swift client is included as a Git submodule. Always clone the repository with submodules enabled:
+The Swift client and .NET SDK are included as Git submodules. Always clone the repository with submodules enabled:
 
 ```bash
 git clone --recurse-submodules https://github.com/Azure/azure-signalr-client-e2e.git
@@ -21,6 +20,7 @@ git submodule update --init --recursive
 
 ## Install Prerequisites
 ### Requirements
+- .NET SDK: 8.0
 - Java JDK: OpenJDK 21
 - Maven: >= 3.6.3
 - Swift toolchain: >= 5.10
@@ -36,6 +36,7 @@ You can either install them manually or run the provided script.
 
 ### Quick verification
 ```bash
+dotnet --version
 javac -version
 mvn -v | head -n1
 swift --version
@@ -50,8 +51,8 @@ export E2E_CONNECTION_STRING="<your-azure-signalr-connection-string>"
 ```
 
 The script:
-- Run a local test server at `http://localhost:8080/test`
-- Runs the Java tests with Maven surefire selection (`mvn -Dtest=IntegrationTests test` in `java/`)
-- Runs the Swift tests with filter (`swift test --filter SignalRClientIntegrationTests` in `swift/`)
-    - Known issue: even if a failure occurs, it still continues to run all tests
+- Starts a local test server at `http://localhost:8080/test` (from `server/`)
+- Runs the Java tests (`mvn -Dtest=IntegrationTests test` in `java/`)
+- Runs the Swift tests (`swift test --filter SignalRClientIntegrationTests` in `swift/`)
+- Runs the .NET tests (`dotnet test` in `dotnet/test/Microsoft.Azure.SignalR.E2ETests/`)
 - Emits a non-zero exit code when any suite fails

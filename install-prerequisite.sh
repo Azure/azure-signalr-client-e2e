@@ -171,14 +171,7 @@ ensure_dotnet() {
   fi
 }
 
-ensure_cpp() {
-  (( WITH_CPP == 1 )) || return 0
-  if [[ "$PKG_MGR" == "apt" ]]; then
-    install_apt_packages build-essential cmake pkg-config libssl-dev
-  else
-    warn "Install C++ build tools manually (compiler, cmake, openssl dev)."
-  fi
-}
+
 
 ensure_swift() {
   # If Swift already present and matches requested major.minor, skip artifact installation.
@@ -224,8 +217,8 @@ ensure_swift() {
 log "Starting prerequisite installation"
 ensure_java
 ensure_maven
+ensure_dotnet
 ensure_swift
-# todo: .net and c++
 
 ok "All prerequisite steps completed."
 log "Verify with: javac -version && mvn -v && swift --version || true"

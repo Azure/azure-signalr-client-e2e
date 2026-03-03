@@ -4,6 +4,7 @@ set -uo pipefail
 # set test 
 JAVA_TEST_CMD=(mvn -Dtest=IntegrationTests test)
 SWIFT_TEST_CMD=(swift test --filter SignalRClientIntegrationTests)
+DOTNET_TEST_CMD=(dotnet test --logger:"console;verbosity=normal")
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SIGNALR_INTEGRATION_TEST_URL="http://localhost:8080/test"
 
@@ -20,12 +21,13 @@ echo "==> Test Configuration:"
 echo "SIGNALR_INTEGRATION_TEST_URL=${SIGNALR_INTEGRATION_TEST_URL}"
 echo "JAVA_TEST_CMD: ${JAVA_TEST_CMD[*]}"
 echo "SWIFT_TEST_CMD: ${SWIFT_TEST_CMD[*]}"
+echo "DOTNET_TEST_CMD: ${DOTNET_TEST_CMD[*]}"
 echo "E2E_CONNECTION_STRING=\"${E2E_CONNECTION_STRING:0:20}...${E2E_CONNECTION_STRING: -20}\""
 
 # Run Server
 echo "==> Running Test Server..."
 (
-  cd "$REPO_ROOT/test-server"
+  cd "$REPO_ROOT/server"
   export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
   dotnet run -p:DefineConstants="USE_AZURE_SIGNALR" > test-server.log 2>&1 &
   sleep 5
@@ -59,6 +61,20 @@ if [[ $swift_status -ne 0 ]]; then
   failures=1
 else
   echo "Swift tests passed"
+fi
+
+echo "==> Running .NET tests..."
+(
+  cd "$REPO_ROOT/dotnet/test/Microsoft.Azure.SignalR.E2ETests"
+  export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
+  "${DOTNET_TEST_CMD[@]}"
+)
+dotnet_status=$?
+if [[ $dotnet_status -ne 0 ]]; then
+  echo ".NET tests failed with exit code ${dotnet_status}"
+  failures=1
+else
+  echo ".NET tests passed"
 fi
 
 if [[ $failures -ne 0 ]]; then

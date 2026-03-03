@@ -1,3 +1,16 @@
-target
-obj
-bin
+# Build outputs
+target/
+obj/
+bin/
+artifacts/
+
+# Submodule build caches
+swift/.build/
+dotnet/.build/
+
+# Logs
+*.log
+wget-log
+
+# Test results
+TestResults/

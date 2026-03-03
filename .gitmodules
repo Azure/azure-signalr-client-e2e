@@ -2,8 +2,8 @@
 	path = swift
 	url = https://github.com/dotnet/signalr-client-swift
 	branch = dev
-	
-[submodule "cpp/signalr-client-cpp"]
-	path = cpp/signalr-client-cpp
-	url = https://github.com/aspnet/SignalR-Client-Cpp
-	branch = main
+
+[submodule "dotnet"]
+	path = dotnet
+	url = https://github.com/Azure/azure-signalr.git
+	branch = dev
