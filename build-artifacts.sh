@@ -49,6 +49,9 @@ log "Building Java tests..."
 (
   cd "$REPO_ROOT/java"
   mvn package -DskipTests -q
+  # Copy all runtime + test dependencies into target/dependency/
+  # so tests can run offline with just `java -cp`
+  mvn dependency:copy-dependencies -DincludeScope=test -q
 )
 mkdir -p "$OUTPUT_DIR/java"
 cp -r "$REPO_ROOT/java/target/" "$OUTPUT_DIR/java/"
