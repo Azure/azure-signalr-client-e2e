@@ -29,7 +29,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   build:
     name: Build
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'cancelled' }}
     runs-on: ubuntu-latest
     outputs:
       dotnet-version: ${{ steps.versions.outputs.dotnet }}
@@ -47,54 +47,118 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "════════════════════════════════════════════════════════════"
+          echo "Client E2E (Stable SDK) — Build"
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "════════════════════════════════════════════════════════════"
+
+          echo ""
+          echo "── Current submodule state (before version resolution) ──"
+          git submodule foreach --quiet 'echo "  $name: $(git rev-parse --short HEAD)"'
+          CURRENT_JAVA=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "  java (pom.xml): $CURRENT_JAVA"
+
+          echo ""
+          echo "── Resolving stable versions from registries ──"
+
           # .NET: latest stable (non-preview) from NuGet
+          echo ""
+          echo "  [.NET] Querying NuGet API..."
           DOTNET_VER=$(curl -sL "https://api.nuget.org/v3-flatcontainer/microsoft.azure.signalr/index.json" \
             | jq -r '[.versions[] | select(contains("-") | not)] | last')
+          echo "  [.NET] Latest stable (non-preview): $DOTNET_VER"
+          echo "  [.NET] Source: https://api.nuget.org/v3-flatcontainer/microsoft.azure.signalr/index.json"
+          echo "  [.NET] Filter: exclude versions containing '-' (preview/rc/alpha/beta)"
           echo "dotnet=$DOTNET_VER" >> "$GITHUB_OUTPUT"
-          echo "✓ .NET stable: $DOTNET_VER"
 
           # Java: latest stable (non-preview) from Maven Central
+          echo ""
+          echo "  [Java] Querying Maven Central maven-metadata.xml..."
           JAVA_VER=$(curl -s "https://repo1.maven.org/maven2/com/microsoft/signalr/signalr/maven-metadata.xml" \
             | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/' \
             | grep -v 'preview\|alpha\|beta\|rc' | sort -V | tail -1)
+          echo "  [Java] Latest stable (non-preview): $JAVA_VER"
+          echo "  [Java] Source: repo1.maven.org/maven2/com/microsoft/signalr/signalr/maven-metadata.xml"
+          echo "  [Java] Filter: exclude preview|alpha|beta|rc, sort -V, take last"
+          echo "  [Java] Current pom.xml version: $CURRENT_JAVA → will be overwritten to $JAVA_VER"
           echo "java=$JAVA_VER" >> "$GITHUB_OUTPUT"
-          echo "✓ Java stable: $JAVA_VER"
 
           # Swift: latest stable (non-preview) tag from GitHub
+          echo ""
+          echo "  [Swift] Querying GitHub tags API..."
           SWIFT_TAG=$(curl -s "https://api.github.com/repos/dotnet/signalr-client-swift/tags?per_page=100" \
             | jq -r '[.[].name | select(test("preview|alpha|beta|rc") | not)] | first')
+          echo "  [Swift] Latest stable (non-preview) tag: $SWIFT_TAG"
+          echo "  [Swift] Source: api.github.com/repos/dotnet/signalr-client-swift/tags"
+          echo "  [Swift] Filter: exclude preview|alpha|beta|rc, take first (newest)"
           echo "swift=$SWIFT_TAG" >> "$GITHUB_OUTPUT"
-          echo "✓ Swift stable: $SWIFT_TAG"
+
+          echo ""
+          echo "── Stable SDK Versions Summary ──"
+          echo "  .NET:  $DOTNET_VER (NuGet, non-preview)"
+          echo "  Java:  $JAVA_VER (Maven Central, non-preview)"
+          echo "  Swift: $SWIFT_TAG (GitHub tag, non-preview)"
+          echo ""
 
       - name: Checkout .NET SDK at stable tag
         run: |
+          echo ""
+          echo "── .NET SDK: Checking out stable tag ──"
           cd dotnet
+          echo "  Fetching tags from origin..."
           git fetch --tags origin
           DOTNET_VER="${{ steps.versions.outputs.dotnet }}"
+          echo "  Target version: $DOTNET_VER"
+          echo "  Current HEAD: $(git rev-parse --short HEAD) ($(git log -1 --format='%s' HEAD))"
           # Try common tag patterns: v1.33.0 or 1.33.0
-          TAG=$(git tag -l | grep -E "^v?${DOTNET_VER}$" | head -1)
+          echo "  Searching for tag matching: ^v?${DOTNET_VER}$"
+          MATCHING_TAGS=$(git tag -l | grep -E "^v?${DOTNET_VER}$" || true)
+          echo "  Matching tags found: ${MATCHING_TAGS:-none}"
+          TAG=$(echo "$MATCHING_TAGS" | head -1)
           if [[ -n "$TAG" ]]; then
-            echo "Checking out .NET SDK tag: $TAG"
+            echo "  ✓ Checking out .NET SDK tag: $TAG"
             git checkout "$TAG"
+            echo "  After checkout: $(git rev-parse --short HEAD)"
           else
+            echo "  ⚠ No tag found for .NET SDK $DOTNET_VER — using dev HEAD"
+            echo "  Available tags (last 10): $(git tag -l --sort=-v:refname | head -10 | tr '\n' ' ')"
             echo "::warning::No tag found for .NET SDK $DOTNET_VER — using dev HEAD"
           fi
 
       - name: Update Java SDK to stable version
         run: |
+          echo ""
+          echo "── Java SDK: Updating pom.xml to stable version ──"
           JAVA_VER="${{ steps.versions.outputs.java }}"
+          BEFORE=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "  Before: $BEFORE"
           sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${JAVA_VER}</version>|}" java/pom.xml
-          echo "Updated Java SDK to $JAVA_VER"
+          AFTER=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "  After:  $AFTER"
+          if [[ "$BEFORE" == "$AFTER" ]]; then
+            echo "  (no change — already at stable version)"
+          else
+            echo "  ✓ Updated com.microsoft.signalr:signalr $BEFORE → $AFTER"
+          fi
 
       - name: Checkout Swift SDK at stable tag
         run: |
+          echo ""
+          echo "── Swift SDK: Checking out stable tag ──"
           cd swift
+          echo "  Fetching tags from origin..."
           git fetch --tags origin
           SWIFT_TAG="${{ steps.versions.outputs.swift }}"
+          echo "  Target tag: $SWIFT_TAG"
+          echo "  Current HEAD: $(git rev-parse --short HEAD) ($(git log -1 --format='%s' HEAD))"
           if [[ -n "$SWIFT_TAG" && "$SWIFT_TAG" != "null" ]]; then
-            echo "Checking out Swift SDK tag: $SWIFT_TAG"
+            echo "  ✓ Checking out Swift SDK tag: $SWIFT_TAG"
             git checkout "$SWIFT_TAG"
+            echo "  After checkout: $(git rev-parse --short HEAD)"
           else
+            echo "  ⚠ No stable Swift tag found — using dev HEAD"
+            echo "  Available tags (last 10): $(git tag -l --sort=-v:refname | head -10 | tr '\n' ' ')"
             echo "::warning::No stable Swift tag found — using dev HEAD"
           fi
 
@@ -130,6 +194,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo ""
+          echo "── Publishing Stable GitHub Release ──"
+
           cat > release-notes.md <<EOF
           ### Stable SDK Versions
           - **.NET**: \`${{ steps.versions.outputs.dotnet }}\`
@@ -137,18 +204,38 @@ jobs:
           - **Swift**: \`${{ steps.versions.outputs.swift }}\`
           EOF
 
+          echo "  Release notes:"
+          cat release-notes.md | sed 's/^/    /'
+
           tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
+          ARCHIVE_SIZE=$(du -h e2e-artifacts-stable.tar.gz | cut -f1)
+          echo "  Archive size: $ARCHIVE_SIZE"
 
           TAG="stable-$(date -u +%Y%m%d-%H%M%S)"
+          TITLE="Client E2E Artifacts (Stable) - $(date -u +%Y%m%d-%H%M%S)"
+          echo "  Tag:   $TAG"
+          echo "  Title: $TITLE"
+
           gh release create "$TAG" \
-            --title "Client E2E Artifacts (Stable) - $(date -u +%Y%m%d-%H%M%S)" \
+            --title "$TITLE" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-stable.tar.gz
+          echo "  ✓ Timestamped release created"
 
-          # Move the latest-stable tag to this commit for stable download URL
+          # Update the latest-stable release (delete old release object, recreate)
+          echo ""
+          echo "── Updating latest-stable release ──"
+          gh release delete latest-stable --yes 2>/dev/null && echo "  Deleted old latest-stable release" || echo "  No previous latest-stable release to delete"
           git tag -f latest-stable
           git push origin latest-stable --force
+          echo "  ✓ latest-stable tag moved to $(git rev-parse --short HEAD)"
+          gh release create latest-stable \
+            --title "Client E2E Artifacts (Stable) - Latest" \
+            --notes-file release-notes.md \
+            --latest=false \
+            e2e-artifacts-stable.tar.gz
+          echo "  ✓ latest-stable release created"
 
   # ═══════════════════════════════════════════════════════════════════════════
   #  Tests
@@ -485,6 +572,19 @@ jobs:
       - name: Calculate results
         id: results
         run: |
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo "Client E2E (Stable SDK) — Summary"
+          echo "════════════════════════════════════════════════════════════"
+
+          echo ""
+          echo "── Individual job results ──"
+          echo "  .NET (Default Mode):    ${{ needs.test-dotnet-default.result }}"
+          echo "  .NET (Serverless Mode): ${{ needs.test-dotnet-serverless.result }}"
+          echo "  Java:                   ${{ needs.test-java.result }}"
+          echo "  Swift (Ubuntu):         ${{ needs.test-swift-linux.result }}"
+          echo "  Swift (macOS):          ${{ needs.test-swift-macos.result }}"
+
           PASSED=0; TOTAL=5
           [[ "${{ needs.test-dotnet-default.result }}" == "success" ]] && ((PASSED++)) || true
           [[ "${{ needs.test-dotnet-serverless.result }}" == "success" ]] && ((PASSED++)) || true
@@ -496,6 +596,10 @@ jobs:
           if [[ $PASSED -eq $TOTAL ]]; then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
           elif [[ $PASSED -gt 0 ]]; then echo "color=yellow" >> "$GITHUB_OUTPUT"
           else echo "color=red" >> "$GITHUB_OUTPUT"; fi
+
+          echo ""
+          echo "── Result: $PASSED/$TOTAL passed ──"
+          echo ""
 
       - name: Job summary
         run: |
@@ -519,10 +623,14 @@ jobs:
           TOTAL=${{ steps.results.outputs.total }}
           COLOR=${{ steps.results.outputs.color }}
 
+          echo "── Updating stable badge on badges branch ──"
+          echo "  Badge content: ${PASSED}/${TOTAL} passed (color: ${COLOR})"
+
           # Try to clone the badges branch; create it if it doesn't exist
           git clone --single-branch --branch badges \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" \
             badge-repo 2>/dev/null || {
+            echo "  ⚠ badges branch not found — creating new orphan branch"
             mkdir -p badge-repo && cd badge-repo
             git init && git checkout --orphan badges
             git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
@@ -532,9 +640,14 @@ jobs:
           cd badge-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "{\"schemaVersion\":1,\"label\":\"Stable SDK\",\"message\":\"${PASSED}/${TOTAL} passed\",\"color\":\"${COLOR}\"}" > stable.json
+
+          BADGE_JSON="{\"schemaVersion\":1,\"label\":\"Stable SDK\",\"message\":\"${PASSED}/${TOTAL} passed\",\"color\":\"${COLOR}\"}"
+          echo "$BADGE_JSON" > stable.json
+          echo "  Badge JSON: $BADGE_JSON"
+
           git add stable.json
-          git diff --cached --quiet || {
+          git diff --cached --quiet && echo "  (no change to badge)" || {
             git commit -m "Update stable badge: ${PASSED}/${TOTAL} passed"
             git push origin badges 2>/dev/null || git push --set-upstream origin badges
+            echo "  ✓ Badge pushed to badges branch"
           }

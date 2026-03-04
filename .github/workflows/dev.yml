@@ -60,10 +60,31 @@ jobs:
       - name: Collect SDK versions
         id: versions
         run: |
-          echo "dotnet=$(git -C dotnet rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "swift=$(git -C swift rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "════════════════════════════════════════════════════════════"
+          echo "Client E2E (Dev SDK) — Build"
+          echo "Triggered by: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "════════════════════════════════════════════════════════════"
+
+          DOTNET_SHA=$(git -C dotnet rev-parse --short HEAD)
+          DOTNET_FULL=$(git -C dotnet rev-parse HEAD)
+          SWIFT_SHA=$(git -C swift rev-parse --short HEAD)
+          SWIFT_FULL=$(git -C swift rev-parse HEAD)
           JAVA_VER=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml \
             | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+
+          echo ""
+          echo "── Dev SDK Versions ──"
+          echo "  .NET:  $DOTNET_SHA ($DOTNET_FULL)"
+          echo "         source: Azure/azure-signalr@dev submodule"
+          echo "  Java:  $JAVA_VER"
+          echo "         source: com.microsoft.signalr:signalr from pom.xml (Maven Central)"
+          echo "  Swift: $SWIFT_SHA ($SWIFT_FULL)"
+          echo "         source: dotnet/signalr-client-swift@dev submodule"
+          echo ""
+
+          echo "dotnet=$DOTNET_SHA" >> "$GITHUB_OUTPUT"
+          echo "swift=$SWIFT_SHA" >> "$GITHUB_OUTPUT"
           echo "java=$JAVA_VER" >> "$GITHUB_OUTPUT"
 
       - name: Build all artifacts
@@ -99,22 +120,43 @@ jobs:
 
       - name: Package artifacts for release
         run: |
+          echo "── Packaging artifacts ──"
           tar -czf e2e-artifacts-dev.tar.gz -C artifacts .
+          echo "  Archive size: $(du -h e2e-artifacts-dev.tar.gz | cut -f1)"
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="dev-$(date -u +%Y%m%d-%H%M%S)"
+          echo "── Publishing GitHub Release ──"
+          echo "  Tag:   $TAG"
+          echo "  Title: Client E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)"
+          echo ""
+          echo "── Release Notes ──"
+          cat release-notes.md
+          echo ""
+
           gh release create "$TAG" \
             --title "Client E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-dev.tar.gz
+          echo "  ✓ Timestamped release created"
 
-          # Move the latest-dev tag to this commit for stable download URL
+          # Update the latest-dev release (delete old release object, recreate)
+          echo ""
+          echo "── Updating latest-dev release ──"
+          gh release delete latest-dev --yes 2>/dev/null && echo "  Deleted old latest-dev release" || echo "  No previous latest-dev release to delete"
           git tag -f latest-dev
           git push origin latest-dev --force
+          echo "  ✓ latest-dev tag moved to $(git rev-parse --short HEAD)"
+          gh release create latest-dev \
+            --title "Client E2E Artifacts (Dev) - Latest" \
+            --notes-file release-notes.md \
+            --latest=false \
+            e2e-artifacts-dev.tar.gz
+          echo "  ✓ latest-dev release created"
 
   # ═══════════════════════════════════════════════════════════════════════════
   #  Tests
