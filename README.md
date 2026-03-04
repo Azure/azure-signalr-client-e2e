@@ -1,5 +1,12 @@
 # Azure SignalR Client E2E Tests
 
+[![Build & Release](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/build.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/build.yml)
+[![.NET E2E (Default)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-dotnet-default.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-dotnet-default.yml)
+[![.NET E2E (Serverless)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-dotnet-serverless.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-dotnet-serverless.yml)
+[![Java E2E](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-java.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-java.yml)
+[![Swift Linux E2E](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-swift-linux.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-swift-linux.yml)
+[![Swift macOS E2E](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-swift-macos.yml/badge.svg)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/test-swift-macos.yml)
+
 This repository hosts multiple languages client E2E tests for Azure SignalR. It helps verify all language clients work correctly with Azure SignalR Service in a single pass.
 
 - Supported clients: [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/), [.NET](https://github.com/Azure/azure-signalr)

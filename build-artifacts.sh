@@ -69,6 +69,10 @@ log "Building Swift tests..."
 )
 mkdir -p "$OUTPUT_DIR/swift"
 cp -r "$REPO_ROOT/swift/.build/" "$OUTPUT_DIR/swift/.build"
+# Also bundle source for cross-distro builds (ADO builds from source on Azure Linux)
+cp "$REPO_ROOT/swift/Package.swift" "$OUTPUT_DIR/swift/"
+cp -r "$REPO_ROOT/swift/Sources" "$OUTPUT_DIR/swift/Sources"
+cp -r "$REPO_ROOT/swift/Tests" "$OUTPUT_DIR/swift/Tests"
 ok "Swift tests → $OUTPUT_DIR/swift/"
 
 # ── Copy run script into artifact package ────────────────────────────────────

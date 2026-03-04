@@ -1,25 +1,17 @@
 ###############################################################################
-#  Build client E2E test artifacts and publish as a GitHub Release.          #
-#                                                                            #
-#  Triggered on every push to master.  Produces a tarball containing:        #
-#    server/   - published .NET test-server                                  #
-#    dotnet/   - .NET E2E test DLLs                                          #
-#    java/     - compiled Java test classes + pom.xml                         #
-#    swift/    - Swift test binaries                                          #
-#    run-from-artifacts.sh                                                   #
-#                                                                            #
-#  The release is tagged "artifacts-<short-sha>" and marked as latest.       #
-#  Downstream ADO pipelines download the latest release.                     #
+#  Build & Release: compile all E2E test artifacts and publish as a GitHub   #
+#  Release.  Downstream test workflows are triggered automatically via       #
+#  workflow_run when this workflow completes.                                 #
 ###############################################################################
-name: Build E2E Artifacts
+name: Build & Release
 
 on:
   push:
     branches: [master]
-  workflow_dispatch:         # allow manual trigger
+  workflow_dispatch:
 
 permissions:
-  contents: write            # needed to create GitHub Releases
+  contents: write            # create GitHub Releases
 
 jobs:
   build:
@@ -56,9 +48,23 @@ jobs:
           cd artifacts
           tar -czf ../client-e2e-artifacts.tar.gz .
 
-      - name: Generate release tag
-        id: tag
-        run: echo "tag=artifacts-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Generate release metadata
+        id: meta
+        run: |
+          echo "tag=artifacts-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+          # Collect submodule commit info for traceability
+          {
+            echo 'notes<<EOF'
+            echo "Auto-built from commit ${{ github.sha }}"
+            echo ""
+            echo "### Client SDK Commits"
+            git submodule foreach --quiet '
+              repo_url=$(git -C "$toplevel" config --get submodule."$name".url)
+              echo "- **$name**: [\`$(git rev-parse --short HEAD)\`](${repo_url}/commit/$(git rev-parse HEAD))"
+            '
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Delete existing 'latest' release (if any)
         env:
@@ -73,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create latest \
-            --title "E2E Artifacts (${{ steps.tag.outputs.tag }})" \
-            --notes "Auto-built from commit ${{ github.sha }}" \
+            --title "Client E2E Artifacts (${{ steps.meta.outputs.tag }})" \
+            --notes "${{ steps.meta.outputs.notes }}" \
             --latest \
             client-e2e-artifacts.tar.gz
