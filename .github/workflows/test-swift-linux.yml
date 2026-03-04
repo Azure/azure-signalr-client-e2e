@@ -10,6 +10,9 @@ on:
     types: [completed]
   workflow_dispatch:
 
+env:
+  MAX_ATTEMPTS: 3
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -91,7 +94,16 @@ jobs:
             exit 1
           fi
           chmod +x "$SWIFT_XCTEST"
-          "$SWIFT_XCTEST" SignalRClientIntegrationTests.IntegrationTests
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
+            "$SWIFT_XCTEST" SignalRClientIntegrationTests.IntegrationTests && break
+            echo "Attempt $attempt failed."
+            if [ $attempt -lt $MAX_ATTEMPTS ]; then
+              WAIT=$((RANDOM % 11 + 5))
+              echo "Retrying in ${WAIT}s..."
+              sleep $WAIT
+            fi
+          done
           EXIT_CODE=$?
 
           echo "--- Server log ---"

@@ -11,6 +11,18 @@ This repository hosts multiple languages client E2E tests for Azure SignalR. It 
 
 - Supported clients: [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/), [.NET](https://github.com/Azure/azure-signalr)
 
+## SDK version sources
+
+Each SDK has a **stable version** (latest release on its registry) and a **dev version** (latest commit on its development branch). Currently the E2E tests run against the **dev version**.
+
+| SDK | Dev version | Stable version |
+|-----|-------------|----------------|
+| .NET | [`Azure/azure-signalr`](https://github.com/Azure/azure-signalr) `dev` branch | [NuGet](https://www.nuget.org/packages/Microsoft.Azure.SignalR) |
+| Java | Version pinned in [`java/pom.xml`](java/pom.xml) | [Maven Central](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr) |
+| Swift | [`dotnet/signalr-client-swift`](https://github.com/dotnet/signalr-client-swift) `dev` branch | [GitHub Releases](https://github.com/dotnet/signalr-client-swift/tags) |
+
+The exact versions used in each build are recorded in the [latest release notes](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest).
+
 ## Cloning with submodules
 
 The Swift client and .NET SDK are included as Git submodules. Always clone the repository with submodules enabled:
@@ -63,3 +75,11 @@ The script:
 - Runs the Swift tests (`swift test --filter SignalRClientIntegrationTests` in `swift/`)
 - Runs the .NET tests (`dotnet test` in `dotnet/test/Microsoft.Azure.SignalR.E2ETests/`)
 - Emits a non-zero exit code when any suite fails
+
+## CI Workflows
+
+Tests run automatically on every push to `master`. Each SDK has its own workflow and badge (see top of this file).
+
+- **Check which SDK commit was tested**: Go to [Releases](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest) → the `latest` release notes list each submodule's commit hash.
+- **Re-run a failed test**: Click the badge → open the failed run → click **Re-run failed jobs**.
+- **Manually trigger a test**: Click the badge → click **Run workflow** on the workflow page.
