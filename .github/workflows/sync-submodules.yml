@@ -1,13 +1,16 @@
 ###############################################################################
-#  Sync Submodules — periodically check upstream SDK repos for updates.      #
+#  Sync Submodules — check upstream SDK repos for updates.                   #
 #                                                                            #
-#  Runs daily. If any submodule (dotnet/, swift/) has a newer commit on      #
-#  its tracked branch, this workflow commits the update and pushes to        #
-#  master, which automatically triggers Client E2E (Dev SDK) workflow.       #
+#  Entry point for the CI chain:                                             #
+#    push / schedule / manual → sync-submodules → dev → stable              #
+#                                                                            #
+#  Runs daily and on every push to master.                                   #
 ###############################################################################
 name: "Sync Submodules"
 
 on:
+  push:
+    branches: [master]
   schedule:
     - cron: '0 0 * * *'     # daily at UTC 00:00
   workflow_dispatch:

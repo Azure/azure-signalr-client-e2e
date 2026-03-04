@@ -82,14 +82,15 @@ The script:
 
 ## CI Workflows
 
-There are two CI pipelines (see badges at the top):
+There are three CI workflows that run in sequence (see badges at the top):
 
-| Workflow | Trigger | What it tests |
-|----------|---------|---------------|
-| **Client E2E (Dev SDK)** | Every push to `master` | Dev-branch submodules + latest preview Java |
-| **Client E2E (Stable SDK)** | Daily + manual | Latest stable releases from NuGet / Maven Central / GitHub tags |
+| Workflow | Trigger | What it does |
+|----------|---------|------------|
+| **Sync Submodules** | Every push to `master` + daily 00:00 UTC | Syncs submodules to upstream HEAD, updates Java SDK version |
+| **Client E2E (Dev SDK)** | After Sync Submodules completes | Builds & tests with dev submodule HEAD + latest preview Java |
+| **Client E2E (Stable SDK)** | After Dev SDK completes | Resolves latest stable versions from NuGet / Maven / GitHub tags, builds & tests |
 
-Each workflow runs 5 test jobs in parallel: .NET (Default), .NET (Serverless), Java, Swift (Linux), Swift (macOS). The badges show how many tests passed (e.g. "5/5 passed"); badge data is stored on the `badges` branch and updated automatically after each run.
+Each test workflow runs 5 test jobs in parallel: .NET (Default Mode), .NET (Serverless Mode), Java, Swift (Ubuntu), Swift (macOS). The badges show how many tests passed (e.g. "5/5 passed"); badge data is stored on the `badges` branch and updated automatically after each run.
 
 - **Check which SDK version was tested**: [Dev releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-)
 - **Re-run a failed test**: Click the badge → open the failed run → click **Re-run failed jobs**.

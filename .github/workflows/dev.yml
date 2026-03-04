@@ -6,13 +6,14 @@
 #  Java  → latest (including preview) on Maven Central                       #
 #  Swift → signalr-client-swift@dev submodule (built from source)           #
 #                                                                            #
-#  Triggered on every push to master (including sync-submodules) and         #
-#  manually via workflow_dispatch.                                           #
+#  Triggered after Sync Submodules completes, or manually.                   #
 ###############################################################################
 name: "Client E2E (Dev SDK)"
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Sync Submodules"]
+    types: [completed]
     branches: [master]
   workflow_dispatch:
 
@@ -28,6 +29,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   build:
     name: Build
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       dotnet-version: ${{ steps.versions.outputs.dotnet }}
@@ -105,7 +107,7 @@ jobs:
         run: |
           TAG="dev-$(date -u +%Y%m%d-%H%M%S)"
           gh release create "$TAG" \
-            --title "Dev SDK E2E — $(date -u +%Y-%m-%d)" \
+            --title "Client E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-dev.tar.gz
@@ -118,7 +120,7 @@ jobs:
   #  Tests
   # ═══════════════════════════════════════════════════════════════════════════
   test-dotnet-default:
-    name: .NET Default
+    name: .NET (Default Mode)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -162,7 +164,7 @@ jobs:
           exit 1
 
   test-dotnet-serverless:
-    name: .NET Serverless
+    name: .NET (Serverless Mode)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -284,7 +286,7 @@ jobs:
           exit $EXIT_CODE
 
   test-swift-linux:
-    name: Swift Linux
+    name: Swift (Ubuntu)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -365,7 +367,7 @@ jobs:
           exit $EXIT_CODE
 
   test-swift-macos:
-    name: Swift macOS
+    name: Swift (macOS)
     needs: build
     runs-on: macos-14
     steps:
@@ -468,11 +470,11 @@ jobs:
 
           | Test | Status |
           |------|--------|
-          | .NET Default | ${{ needs.test-dotnet-default.result == 'success' && '✅' || '❌' }} |
-          | .NET Serverless | ${{ needs.test-dotnet-serverless.result == 'success' && '✅' || '❌' }} |
+          | .NET (Default Mode) | ${{ needs.test-dotnet-default.result == 'success' && '✅' || '❌' }} |
+          | .NET (Serverless Mode) | ${{ needs.test-dotnet-serverless.result == 'success' && '✅' || '❌' }} |
           | Java | ${{ needs.test-java.result == 'success' && '✅' || '❌' }} |
-          | Swift Linux | ${{ needs.test-swift-linux.result == 'success' && '✅' || '❌' }} |
-          | Swift macOS | ${{ needs.test-swift-macos.result == 'success' && '✅' || '❌' }} |
+          | Swift (Ubuntu) | ${{ needs.test-swift-linux.result == 'success' && '✅' || '❌' }} |
+          | Swift (macOS) | ${{ needs.test-swift-macos.result == 'success' && '✅' || '❌' }} |
           EOF
 
       - name: Update badge
