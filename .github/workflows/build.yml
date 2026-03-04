@@ -53,18 +53,27 @@ jobs:
         run: |
           echo "tag=artifacts-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-          # Collect submodule commit info for traceability
-          {
-            echo 'notes<<EOF'
-            echo "Auto-built from commit ${{ github.sha }}"
-            echo ""
-            echo "### Client SDK Commits"
-            git submodule foreach --quiet '
-              repo_url=$(git -C "$toplevel" config --get submodule."$name".url)
-              echo "- **$name**: [\`$(git rev-parse --short HEAD)\`](${repo_url}/commit/$(git rev-parse HEAD))"
-            '
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          # Write release notes to a file (avoids shell escaping issues)
+          cat > release-notes.md <<'NOTES_EOF'
+          Auto-built from commit ${{ github.sha }}
+
+          ### Client SDK Commits
+          NOTES_EOF
+          # trim leading spaces from heredoc
+          sed -i 's/^          //' release-notes.md
+
+          # Submodule commits (dotnet, swift)
+          git submodule foreach --quiet 'echo $name $(git rev-parse HEAD)' | while IFS= read -r line; do
+            name=$(echo "$line" | cut -d' ' -f1)
+            sha=$(echo "$line" | cut -d' ' -f2)
+            short=$(echo "$sha" | cut -c1-7)
+            url=$(git config --get submodule."$name".url | sed 's/\.git$//')
+            echo "- **${name}**: [\`${short}\`](${url}/commit/${sha})" >> release-notes.md
+          done
+
+          # Java SDK version from pom.xml
+          java_ver=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "- **java**: signalr \`${java_ver}\`" >> release-notes.md
 
       - name: Delete existing 'latest' release (if any)
         env:
@@ -80,6 +89,6 @@ jobs:
         run: |
           gh release create latest \
             --title "Client E2E Artifacts (${{ steps.meta.outputs.tag }})" \
-            --notes "${{ steps.meta.outputs.notes }}" \
+            --notes-file release-notes.md \
             --latest \
             client-e2e-artifacts.tar.gz

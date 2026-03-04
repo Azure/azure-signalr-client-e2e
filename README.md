@@ -63,3 +63,11 @@ The script:
 - Runs the Swift tests (`swift test --filter SignalRClientIntegrationTests` in `swift/`)
 - Runs the .NET tests (`dotnet test` in `dotnet/test/Microsoft.Azure.SignalR.E2ETests/`)
 - Emits a non-zero exit code when any suite fails
+
+## CI Workflows
+
+Tests run automatically on every push to `master`. Each SDK has its own workflow and badge (see top of this file).
+
+- **Check which SDK commit was tested**: Go to [Releases](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest) → the `latest` release notes list each submodule's commit hash.
+- **Re-run a failed test**: Click the badge → open the failed run → click **Re-run failed jobs**.
+- **Manually trigger a test**: Click the badge → click **Run workflow** on the workflow page.
