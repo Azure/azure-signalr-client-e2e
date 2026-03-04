@@ -3,8 +3,7 @@
 #                                                                            #
 #  Runs daily. If any submodule (dotnet/, swift/) has a newer commit on      #
 #  its tracked branch, this workflow commits the update and pushes to        #
-#  master, which automatically triggers Build & Release → all test           #
-#  workflows.                                                                #
+#  master, which automatically triggers Client E2E (Dev SDK) workflow.       #
 ###############################################################################
 name: "Sync Submodules"
 
@@ -34,16 +33,28 @@ jobs:
 
           git submodule update --remote
 
+          # Update Java SignalR SDK to latest version on Maven Central (including preview)
+          # This is the dev version; stable.yml resolves its own stable version at build time.
+          # Use maven-metadata.xml <latest> element (authoritative, always up-to-date).
+          # NOTE: search.maven.org Solr API has stale index — do NOT use it.
+          LATEST_JAVA=$(curl -s "https://repo1.maven.org/maven2/com/microsoft/signalr/signalr/maven-metadata.xml" \
+            | grep '<latest>' | head -1 | sed 's/.*<latest>\(.*\)<\/latest>.*/\1/')
+          if [[ -n "$LATEST_JAVA" && "$LATEST_JAVA" != "null" ]]; then
+            CURRENT_JAVA=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+            if [[ "$LATEST_JAVA" != "$CURRENT_JAVA" ]]; then
+              echo "Updating Java SignalR SDK: $CURRENT_JAVA -> $LATEST_JAVA"
+              sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${LATEST_JAVA}</version>|}" java/pom.xml
+            fi
+          fi
+
           if git diff --quiet; then
-            echo "No submodule updates found."
+            echo "No updates found."
             exit 0
           fi
 
-          echo "Submodule updates detected:"
-          git diff --submodule=short
+          echo "Updates detected:"
+          git diff --stat
 
           git add -A
-          git commit -m "chore: sync submodules to latest upstream
-
-          $(git diff --cached --submodule=short)"
+          git commit -m "chore: sync submodules and Java SDK to latest upstream"
           git push origin master
