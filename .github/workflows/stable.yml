@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  MAX_ATTEMPTS: 3
+  MAX_ATTEMPTS: 5
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -283,7 +283,7 @@ NOTES_EOF
               --testcasefilter:"FullyQualifiedName~SignalRServiceE2EFacts" && exit 0
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$((RANDOM % 11 + 5))
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
               echo "Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
@@ -327,7 +327,7 @@ NOTES_EOF
               --testcasefilter:"FullyQualifiedName~Management" && exit 0
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$((RANDOM % 11 + 5))
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
               echo "Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
@@ -402,7 +402,7 @@ NOTES_EOF
             fi
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$((RANDOM % 11 + 5))
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
               echo "Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
@@ -483,7 +483,7 @@ NOTES_EOF
             fi
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$((RANDOM % 11 + 5))
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
               echo "Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
@@ -556,7 +556,7 @@ NOTES_EOF
             fi
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$((RANDOM % 11 + 5))
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
               echo "Retrying in ${WAIT}s..."
               sleep $WAIT
             fi
