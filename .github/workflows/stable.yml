@@ -201,15 +201,15 @@ jobs:
           JAVA_VER=${{ steps.versions.outputs.java }}
           SWIFT_TAG=${{ steps.versions.outputs.swift }}
 
-          cat > release-notes.md <<NOTES_EOF
-### Stable SDK Versions
-
-| SDK | Version | Source |
-|-----|---------|--------|
-| .NET | [\`Microsoft.Azure.SignalR@${DOTNET_VER}\`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/${DOTNET_VER}) | NuGet |
-| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |
-| Swift | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |
-NOTES_EOF
+          {
+            echo '### Stable SDK Versions'
+            echo ''
+            echo '| SDK | Version | Source |'
+            echo '|-----|---------|--------|'
+            echo "| .NET | [\`Microsoft.Azure.SignalR@${DOTNET_VER}\`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/${DOTNET_VER}) | NuGet |"
+            echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
+            echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |"
+          } > release-notes.md
 
           echo "  Release notes:"
           cat release-notes.md | sed 's/^/    /'

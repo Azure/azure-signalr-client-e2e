@@ -109,15 +109,15 @@ jobs:
           SWIFT_FULL=${{ steps.versions.outputs.swift-full }}
           JAVA_VER=${{ steps.versions.outputs.java }}
 
-          cat > release-notes.md <<NOTES_EOF
-### Dev SDK Versions
-
-| SDK | Version | Source |
-|-----|---------|--------|
-| .NET | [\`Azure/azure-signalr@${DOTNET_SHA}\`](https://github.com/Azure/azure-signalr/commit/${DOTNET_FULL}) | Submodule (dev branch) |
-| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |
-| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |
-NOTES_EOF
+          {
+            echo '### Dev SDK Versions'
+            echo ''
+            echo '| SDK | Version | Source |'
+            echo '|-----|---------|--------|'
+            echo "| .NET | [\`Azure/azure-signalr@${DOTNET_SHA}\`](https://github.com/Azure/azure-signalr/commit/${DOTNET_FULL}) | Submodule (dev branch) |"
+            echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
+            echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
+          } > release-notes.md
 
       - name: Package artifacts for release
         run: |
