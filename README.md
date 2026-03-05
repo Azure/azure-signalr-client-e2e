@@ -9,12 +9,12 @@ This repository hosts multiple languages client E2E tests for Azure SignalR. It 
 
 ## Test Coverage
 
-E2E testing covers a **2×2 matrix** of ASRS Runtime × Client SDK version:
+Client E2E testing covers a **2×2 matrix** of ASRS Runtime × Client SDK version:
 
 | | Client SDK Dev | Client SDK Stable |
 |:--|:--|:--|
 | **ASRS Runtime Dev** | Internal Pipeline | Internal Pipeline |
-| **ASRS Runtime Production** | GitHub CI `dev.yml` | GitHub CI `stable.yml` |
+| **ASRS Runtime Production** | GitHub CI | GitHub CI |
 
 > **This repository** covers the bottom row (GitHub CI). The top row is tested by an internal pipeline.
 
@@ -37,6 +37,20 @@ Each SDK is tested against both a **dev** and a **stable** version:
 | Swift | [commit `dd96829`](https://github.com/dotnet/signalr-client-swift/commit/dd96829) (GitHub) | [tag `v1.0.0`](https://github.com/dotnet/signalr-client-swift/releases/tag/v1.0.0) (GitHub) |
 
 The exact versions tested in each run are recorded in the release notes: [Dev SDK releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable SDK releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-).
+
+## Releases
+
+Each CI run publishes a **GitHub Release** containing pre-built test artifacts (`e2e-artifacts-{dev,stable}.tar.gz`). The archive includes the compiled test server, .NET / Java / Swift test binaries, and `run-from-artifacts.sh` so tests can be re-run without rebuilding.
+
+| Release | Description |
+|---------|-------------|
+| [`latest-dev`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-dev) | Always points to the most recent Dev SDK run |
+| [`latest-stable`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-stable) | Always points to the most recent Stable SDK run |
+| `dev-YYYYMMDD-HHMMSS` | Timestamped history for each Dev run |
+| `stable-YYYYMMDD-HHMMSS` | Timestamped history for each Stable run |
+
+Release notes record the exact SDK versions tested. Browse all: [Dev releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-).
+
 
 ## Cloning with submodules
 
@@ -102,16 +116,3 @@ Triggered by every push to `master`, daily at 00:00 UTC, or manually.
 
 - **Re-run a failed test**: Click a badge above → open the failed run → **Re-run failed jobs**.
 - **Manually trigger**: Click a badge above → **Run workflow**.
-
-## Releases
-
-Each CI run publishes a **GitHub Release** containing pre-built test artifacts (`e2e-artifacts-{dev,stable}.tar.gz`). The archive includes the compiled test server, .NET / Java / Swift test binaries, and `run-from-artifacts.sh` so tests can be re-run without rebuilding.
-
-| Release | Description |
-|---------|-------------|
-| [`latest-dev`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-dev) | Always points to the most recent Dev SDK run |
-| [`latest-stable`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-stable) | Always points to the most recent Stable SDK run |
-| `dev-YYYYMMDD-HHMMSS` | Timestamped history for each Dev run |
-| `stable-YYYYMMDD-HHMMSS` | Timestamped history for each Stable run |
-
-Release notes record the exact SDK versions tested. Browse all: [Dev releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-).
