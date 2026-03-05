@@ -9,7 +9,7 @@ This repository hosts multiple languages client E2E tests for Azure SignalR. It 
 
 ## Test Coverage
 
-Client E2E testing covers a **2×2 matrix** of ASRS Runtime × Client SDK version:
+The client E2E testing aims to cover all combinitions of ASRS Runtime version and Client SDK version:
 
 | | Client SDK Dev | Client SDK Stable |
 |:--|:--|:--|
