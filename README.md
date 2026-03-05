@@ -7,9 +7,20 @@ This repository hosts multiple languages client E2E tests for Azure SignalR. It 
 
 - Supported clients: [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/), [.NET](https://github.com/Azure/azure-signalr)
 
+## Test Coverage
+
+E2E testing covers a **2×2 matrix** of ASRS Runtime × Client SDK version:
+
+| | Client SDK Dev | Client SDK Stable |
+|:--|:--|:--|
+| **ASRS Runtime Dev** | Internal Pipeline | Internal Pipeline |
+| **ASRS Runtime Production** | GitHub CI `dev.yml` | GitHub CI `stable.yml` |
+
+> **This repository** covers the bottom row (GitHub CI). The top row is tested by an internal pipeline.
+
 ## SDK version sources
 
-Each SDK has a **stable version** (latest release on its registry) and a **dev version** (latest commit on its development branch). The E2E tests run against **both** — see the two badges above.
+Each SDK is tested against both a **dev** and a **stable** version:
 
 | SDK | Dev version | Stable version |
 |-----|-------------|----------------|
@@ -46,7 +57,7 @@ git submodule update --init --recursive
 - .NET SDK: 8.0
 - Java JDK: OpenJDK 21
 - Maven: >= 3.6.3
-- Swift toolchain: >= 5.10
+- Swift toolchain: >= 6.0
 
 You can either install them manually or run the provided script.
 - Automated install (Recommended): 
@@ -59,39 +70,48 @@ You can either install them manually or run the provided script.
 
 ### Quick verification
 ```bash
-dotnet --version
-javac -version
-mvn -v | head -n1
-swift --version
+dotnet --version; javac -version; mvn -v | head -n1; swift --version
 ```
 
-## Running the test suites
-- Get the connection string for your Azure SignalR resource from Azure portal or CLI.
-- From the repository root, execute:
+## Running the tests
+
+### 1. Build artifacts
+
+```bash
+./build-artifacts.sh
+```
+
+This compiles the test server, .NET / Java / Swift test binaries into `./artifacts/`.
+
+### 2. Run tests from artifacts
+
 ```bash
 export E2E_CONNECTION_STRING="<your-azure-signalr-connection-string>"
-./run-all-tests.sh
+./run-from-artifacts.sh
 ```
 
-The script:
-- Starts a local test server at `http://localhost:8080/test` (from `server/`)
-- Runs the Java tests (`mvn -Dtest=IntegrationTests test` in `java/`)
-- Runs the Swift tests (`swift test --filter SignalRClientIntegrationTests` in `swift/`)
-- Runs the .NET tests (`dotnet test` in `dotnet/test/Microsoft.Azure.SignalR.E2ETests/`)
-- Emits a non-zero exit code when any suite fails
+The script starts a local test server, runs all test suites (Java, Swift, .NET), and exits with a non-zero code if any suite fails.
+
+> **Note:** .NET tests do **not** use the local test server. They spin up an in-process Kestrel server that connects directly to Azure SignalR Service via `AddAzureSignalR()`. Java and Swift tests connect through the local test server.
 
 ## CI Workflows
 
-There are three CI workflows that run in sequence (see badges at the top):
+Three workflows run in sequence: **Sync Submodules** → **Client E2E (Dev SDK)** → **Client E2E (Stable SDK)**.
 
-| Workflow | Trigger | What it does |
-|----------|---------|------------|
-| **Sync Submodules** | Every push to `master` + daily 00:00 UTC | Syncs submodules to upstream HEAD, updates Java SDK version |
-| **Client E2E (Dev SDK)** | After Sync Submodules completes | Builds & tests with dev submodule HEAD + latest preview Java |
-| **Client E2E (Stable SDK)** | After Dev SDK completes | Resolves latest stable versions from NuGet / Maven / GitHub tags, builds & tests |
+Triggered by every push to `master`, daily at 00:00 UTC, or manually.
 
-Each test workflow runs 5 test jobs in parallel: .NET (Default Mode), .NET (Serverless Mode), Java, Swift (Ubuntu), Swift (macOS). The badges show how many tests passed (e.g. "5/5 passed"); badge data is stored on the `badges` branch and updated automatically after each run.
+- **Re-run a failed test**: Click a badge above → open the failed run → **Re-run failed jobs**.
+- **Manually trigger**: Click a badge above → **Run workflow**.
 
-- **Check which SDK version was tested**: [Dev releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-)
-- **Re-run a failed test**: Click the badge → open the failed run → click **Re-run failed jobs**.
-- **Manually trigger**: Click the badge → click **Run workflow** on the workflow page.
+## Releases
+
+Each CI run publishes a **GitHub Release** containing pre-built test artifacts (`e2e-artifacts-{dev,stable}.tar.gz`). The archive includes the compiled test server, .NET / Java / Swift test binaries, and `run-from-artifacts.sh` so tests can be re-run without rebuilding.
+
+| Release | Description |
+|---------|-------------|
+| [`latest-dev`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-dev) | Always points to the most recent Dev SDK run |
+| [`latest-stable`](https://github.com/Azure/azure-signalr-client-e2e/releases/tag/latest-stable) | Always points to the most recent Stable SDK run |
+| `dev-YYYYMMDD-HHMMSS` | Timestamped history for each Dev run |
+| `stable-YYYYMMDD-HHMMSS` | Timestamped history for each Stable run |
+
+Release notes record the exact SDK versions tested. Browse all: [Dev releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-).
