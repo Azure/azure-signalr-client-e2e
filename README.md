@@ -11,10 +11,10 @@ This repository hosts multiple languages client E2E tests for Azure SignalR. It 
 
 The client E2E testing aims to cover all combinitions of ASRS Runtime version and Client SDK version:
 
-| | Client SDK Dev | Client SDK Stable |
+| | Client SDK (Dev) | Client SDK (Stable) |
 |:--|:--|:--|
-| **ASRS Runtime Dev** | Internal Pipeline | Internal Pipeline |
-| **ASRS Runtime Production** | GitHub CI | GitHub CI |
+| **ASRS Runtime (Dev)** | Internal Pipeline | Internal Pipeline |
+| **ASRS Runtime (Production)** | GitHub CI | GitHub CI |
 
 > **This repository** covers the bottom row (GitHub CI). The top row is tested by an internal pipeline.
 
