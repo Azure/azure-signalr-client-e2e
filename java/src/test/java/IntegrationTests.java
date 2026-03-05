@@ -24,11 +24,11 @@ public class IntegrationTests {
     
     @Before
     public void setUp() throws Exception {
-        // url = System.getenv("SIGNALR_INTEGRATION_TEST_URL");
-        url = "http://localhost:8080/test";
+        url = System.getenv("SIGNALR_INTEGRATION_TEST_URL");
         if (url == null || url.isEmpty()) {
-            org.junit.Assume.assumeTrue("Skipping integration tests because SIGNALR_INTEGRATION_TEST_URL is not set.", false);
+            url = "http://localhost:8080/test";
         }
+        System.out.println("Using SignalR URL: " + url);
     }
 
     @Test

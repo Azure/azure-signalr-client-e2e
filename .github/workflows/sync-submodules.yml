@@ -1,0 +1,91 @@
+###############################################################################
+#  Sync Submodules — check upstream SDK repos for updates.                   #
+#                                                                            #
+#  Entry point for the CI chain:                                             #
+#    push / schedule / manual → sync-submodules → dev → stable              #
+#                                                                            #
+#  Runs daily and on every push to master.                                   #
+###############################################################################
+name: "Sync Submodules"
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: '0 0 * * *'     # daily at UTC 00:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update submodules to latest upstream
+        run: |
+          echo "════════════════════════════════════════════════════════════"
+          echo "Sync Submodules — triggered by: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "════════════════════════════════════════════════════════════"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo ""
+          echo "── Current submodule commits (before sync) ──"
+          git submodule foreach --quiet 'echo "  $name: $(git rev-parse --short HEAD)"'
+          CURRENT_JAVA=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "  java (pom.xml): $CURRENT_JAVA"
+
+          echo ""
+          echo "── Updating submodules to latest upstream ──"
+          git submodule update --remote
+
+          echo ""
+          echo "── Updated submodule commits (after sync) ──"
+          git submodule foreach --quiet 'echo "  $name: $(git rev-parse --short HEAD)"'
+
+          # Update Java SignalR SDK to latest version on Maven Central (including preview)
+          # This is the dev version; stable.yml resolves its own stable version at build time.
+          # Use maven-metadata.xml <latest> element (authoritative, always up-to-date).
+          # NOTE: search.maven.org Solr API has stale index — do NOT use it.
+          echo ""
+          echo "── Resolving latest Java version from Maven Central ──"
+          LATEST_JAVA=$(curl -s "https://repo1.maven.org/maven2/com/microsoft/signalr/signalr/maven-metadata.xml" \
+            | grep '<latest>' | head -1 | sed 's/.*<latest>\(.*\)<\/latest>.*/\1/')
+          echo "  Maven Central <latest>: $LATEST_JAVA"
+          echo "  Current pom.xml:        $CURRENT_JAVA"
+          if [[ -n "$LATEST_JAVA" && "$LATEST_JAVA" != "null" ]]; then
+            if [[ "$LATEST_JAVA" != "$CURRENT_JAVA" ]]; then
+              echo "  → Updating Java SDK: $CURRENT_JAVA → $LATEST_JAVA"
+              sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${LATEST_JAVA}</version>|}" java/pom.xml
+            else
+              echo "  → Java SDK already up-to-date"
+            fi
+          else
+            echo "  ::warning::Failed to resolve latest Java version from Maven Central"
+          fi
+
+          echo ""
+          if git diff --quiet; then
+            echo "── No updates found — nothing to commit ──"
+            exit 0
+          fi
+
+          echo "── Changes detected ──"
+          git diff --stat
+          echo ""
+
+          git add -A
+          git commit -m "chore: sync submodules and Java SDK to latest upstream"
+          echo "── Pushing to master ──"
+          git push origin master
+          echo "── Done ──"

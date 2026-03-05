@@ -19,5 +19,7 @@ var app = builder.Build();
 
 app.UseRouting();
 app.MapHub<TestHub>("/test");
+app.MapHub<TestHubJava>("/test-java");
+app.MapHub<TestHubSwift>("/test-swift");
 
 app.Run();
