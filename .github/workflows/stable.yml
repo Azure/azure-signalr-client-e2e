@@ -240,6 +240,20 @@ jobs:
           path: artifacts/
           retention-days: 7
 
+      - name: Package release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        run: |
+          tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
+          echo "Archive size: $(du -h e2e-artifacts-stable.tar.gz | cut -f1)"
+
+      - name: Upload release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-release-tarball-stable
+          path: e2e-artifacts-stable.tar.gz
+          retention-days: 7
+
   # ═══════════════════════════════════════════════════════════════════════════
   #  Release (only when changes detected, parallel with tests)
   # ═══════════════════════════════════════════════════════════════════════════
@@ -252,11 +266,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download release tarball
         uses: actions/download-artifact@v4
         with:
-          name: e2e-artifacts-stable
-          path: artifacts
+          name: e2e-release-tarball-stable
 
       - name: Publish GitHub Release
         env:
@@ -282,7 +295,6 @@ jobs:
           echo "  Release notes:"
           cat release-notes.md | sed 's/^/    /'
 
-          tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
           ARCHIVE_SIZE=$(du -h e2e-artifacts-stable.tar.gz | cut -f1)
           echo "  Archive size: $ARCHIVE_SIZE"
 

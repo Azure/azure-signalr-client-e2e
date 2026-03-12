@@ -140,6 +140,20 @@ jobs:
           path: artifacts/
           retention-days: 7
 
+      - name: Package release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        run: |
+          tar -czf e2e-artifacts-dev.tar.gz -C artifacts .
+          echo "Archive size: $(du -h e2e-artifacts-dev.tar.gz | cut -f1)"
+
+      - name: Upload release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-release-tarball-dev
+          path: e2e-artifacts-dev.tar.gz
+          retention-days: 7
+
   # ═══════════════════════════════════════════════════════════════════════════
   #  Release (only when changes detected, parallel with tests)
   # ═══════════════════════════════════════════════════════════════════════════
@@ -152,11 +166,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download release tarball
         uses: actions/download-artifact@v4
         with:
-          name: e2e-artifacts-dev
-          path: artifacts
+          name: e2e-release-tarball-dev
 
       - name: Create release notes
         run: |
@@ -175,12 +188,6 @@ jobs:
             echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
             echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
           } > release-notes.md
-
-      - name: Package artifacts for release
-        run: |
-          echo "── Packaging artifacts ──"
-          tar -czf e2e-artifacts-dev.tar.gz -C artifacts .
-          echo "  Archive size: $(du -h e2e-artifacts-dev.tar.gz | cut -f1)"
 
       - name: Publish GitHub Release
         env:
