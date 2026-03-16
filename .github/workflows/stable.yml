@@ -35,9 +35,10 @@ jobs:
       dotnet-version: ${{ steps.versions.outputs.dotnet }}
       java-version: ${{ steps.versions.outputs.java }}
       swift-version: ${{ steps.versions.outputs.swift }}
+      has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
@@ -101,7 +102,49 @@ jobs:
           echo "  Swift: $SWIFT_TAG (GitHub tag, non-preview)"
           echo ""
 
+      - name: Check for changes since last release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DOTNET_VER="${{ steps.versions.outputs.dotnet }}"
+          JAVA_VER="${{ steps.versions.outputs.java }}"
+          SWIFT_TAG="${{ steps.versions.outputs.swift }}"
+
+          BODY=$(gh release view latest-stable --json body -q .body 2>/dev/null || echo "")
+          if [[ -z "$BODY" ]]; then
+            echo "── No latest-stable release found — first run ──"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=false
+          echo "$BODY" | grep -qF "${DOTNET_VER}" || CHANGED=true
+          echo "$BODY" | grep -qF "${JAVA_VER}" || CHANGED=true
+          echo "$BODY" | grep -qF "${SWIFT_TAG}" || CHANGED=true
+
+          if [[ "$CHANGED" == "true" ]]; then
+            echo "── Stable SDK versions changed ──"
+            echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "── No changes in stable SDK versions ──"
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reuse existing artifacts (no changes)
+        if: steps.check.outputs.has-changes == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "── Downloading existing artifacts from latest-stable release ──"
+          mkdir -p artifacts
+          gh release download latest-stable -p 'e2e-artifacts-stable.tar.gz'
+          tar -xzf e2e-artifacts-stable.tar.gz -C artifacts
+          echo "  ✓ Reused existing artifacts"
+
       - name: Checkout .NET SDK at stable tag
+        if: steps.check.outputs.has-changes == 'true'
         run: |
           echo ""
           echo "── .NET SDK: Checking out stable tag ──"
@@ -127,6 +170,7 @@ jobs:
           fi
 
       - name: Update Java SDK to stable version
+        if: steps.check.outputs.has-changes == 'true'
         run: |
           echo ""
           echo "── Java SDK: Updating pom.xml to stable version ──"
@@ -143,6 +187,7 @@ jobs:
           fi
 
       - name: Checkout Swift SDK at stable tag
+        if: steps.check.outputs.has-changes == 'true'
         run: |
           echo ""
           echo "── Swift SDK: Checking out stable tag ──"
@@ -163,32 +208,67 @@ jobs:
           fi
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
       - name: Setup JDK 21
-        uses: actions/setup-java@v4
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Swift
+        if: steps.check.outputs.has-changes == 'true'
         uses: SwiftyLab/setup-swift@latest
         with:
           swift-version: '6.0'
 
       - name: Build all artifacts
+        if: steps.check.outputs.has-changes == 'true'
         run: |
           chmod +x ./build-artifacts.sh
           ./build-artifacts.sh ./artifacts
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-artifacts-stable
           path: artifacts/
           retention-days: 7
+
+      - name: Package release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        run: |
+          tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
+          echo "Archive size: $(du -h e2e-artifacts-stable.tar.gz | cut -f1)"
+
+      - name: Upload release tarball
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-release-tarball-stable
+          path: e2e-artifacts-stable.tar.gz
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  Release (only when changes detected, parallel with tests)
+  # ═══════════════════════════════════════════════════════════════════════════
+  release:
+    name: Release
+    needs: build
+    if: needs.build.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download release tarball
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-release-tarball-stable
 
       - name: Publish GitHub Release
         env:
@@ -197,9 +277,9 @@ jobs:
           echo ""
           echo "── Publishing Stable GitHub Release ──"
 
-          DOTNET_VER=${{ steps.versions.outputs.dotnet }}
-          JAVA_VER=${{ steps.versions.outputs.java }}
-          SWIFT_TAG=${{ steps.versions.outputs.swift }}
+          DOTNET_VER=${{ needs.build.outputs.dotnet-version }}
+          JAVA_VER=${{ needs.build.outputs.java-version }}
+          SWIFT_TAG=${{ needs.build.outputs.swift-version }}
 
           {
             echo '### Stable SDK Versions'
@@ -214,7 +294,6 @@ jobs:
           echo "  Release notes:"
           cat release-notes.md | sed 's/^/    /'
 
-          tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
           ARCHIVE_SIZE=$(du -h e2e-artifacts-stable.tar.gz | cut -f1)
           echo "  Archive size: $ARCHIVE_SIZE"
 
@@ -245,416 +324,13 @@ jobs:
           echo "  ✓ latest-stable release created"
 
   # ═══════════════════════════════════════════════════════════════════════════
-  #  Tests
+  #  Tests (reusable workflow, parallel with release)
   # ═══════════════════════════════════════════════════════════════════════════
-  test-dotnet-default:
-    name: .NET (Default Mode)
+  tests:
     needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-artifacts-stable
-          path: artifacts
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Run .NET SignalR E2E tests
-        env:
-          Azure__SignalR__ConnectionString: ${{ secrets.E2E_CONNECTION_STRING }}
-        run: |
-          if [[ -z "${Azure__SignalR__ConnectionString:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
-            exit 0
-          fi
-          DOTNET_DLL=$(find artifacts/dotnet -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
-          if [[ -z "$DOTNET_DLL" ]]; then
-            echo "::error::.NET test DLL not found"
-            exit 1
-          fi
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            dotnet vstest "$DOTNET_DLL" \
-              --logger:"console;verbosity=normal" \
-              --testcasefilter:"FullyQualifiedName~SignalRServiceE2EFacts" && exit 0
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
-          echo "All $MAX_ATTEMPTS attempts failed."
-          exit 1
-
-  test-dotnet-serverless:
-    name: .NET (Serverless Mode)
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-artifacts-stable
-          path: artifacts
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Run .NET Management E2E tests
-        env:
-          Azure__SignalR__ConnectionString: ${{ secrets.E2E_CONNECTION_STRING_SERVERLESS }}
-        run: |
-          if [[ -z "${Azure__SignalR__ConnectionString:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING_SERVERLESS secret not set – skipping"
-            exit 0
-          fi
-          DOTNET_DLL=$(find artifacts/dotnet -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
-          if [[ -z "$DOTNET_DLL" ]]; then
-            echo "::error::.NET test DLL not found"
-            exit 1
-          fi
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            dotnet vstest "$DOTNET_DLL" \
-              --logger:"console;verbosity=normal" \
-              --testcasefilter:"FullyQualifiedName~Management" && exit 0
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
-          echo "All $MAX_ATTEMPTS attempts failed."
-          exit 1
-
-  test-java:
-    name: Java
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-artifacts-stable
-          path: artifacts
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Setup JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Run Java E2E tests
-        env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
-            exit 0
-          fi
-
-          # Start test server
-          export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
-          export ASPNETCORE_URLS="http://localhost:8080"
-          export SIGNALR_INTEGRATION_TEST_URL="http://localhost:8080/test-java"
-          chmod +x artifacts/server/IntegrationTestServer || true
-          artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
-          SERVER_PID=$!
-
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:8080/test-java" 2>/dev/null || true)
-            if [[ -n "$HTTP_CODE" && "$HTTP_CODE" != "000" ]]; then
-              echo "Server ready (HTTP $HTTP_CODE)"
-              break
-            fi
-            sleep 1
-          done
-          if [[ "$i" -eq 30 ]]; then
-            echo "::error::Test server failed to start"
-            cat /tmp/server.log || true
-            exit 1
-          fi
-
-          cd artifacts/java
-          MAIN_JAR=$(find target -maxdepth 1 -name '*.jar' | head -1)
-          DEP_JARS=$(find target/dependency -name '*.jar' 2>/dev/null | tr '\n' ':')
-          CLASSPATH="${MAIN_JAR}:${DEP_JARS}target/test-classes"
-
-          EXIT_CODE=1
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            if java -cp "$CLASSPATH" org.junit.runner.JUnitCore IntegrationTests; then
-              EXIT_CODE=0; break
-            fi
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
-
-          echo "--- Server log ---"
-          cat /tmp/server.log || true
-          kill $SERVER_PID 2>/dev/null || true
-          exit $EXIT_CODE
-
-  test-swift-linux:
-    name: Swift (Ubuntu)
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-artifacts-stable
-          path: artifacts
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Setup Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: '6.0'
-
-      - name: Build Swift tests from source
-        run: |
-          cd artifacts/swift
-          rm -rf .build
-          swift build --build-tests
-
-      - name: Run Swift E2E tests
-        env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
-          SIGNALR_INTEGRATION_TEST_URL: http://localhost:8080/test-swift
-        run: |
-          set -euo pipefail
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
-            exit 0
-          fi
-
-          export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
-          export ASPNETCORE_URLS="http://localhost:8080"
-          chmod +x artifacts/server/IntegrationTestServer || true
-          artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
-          SERVER_PID=$!
-
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:8080/test-swift" 2>/dev/null || true)
-            if [[ -n "$HTTP_CODE" && "$HTTP_CODE" != "000" ]]; then
-              echo "Server ready (HTTP $HTTP_CODE)"
-              break
-            fi
-            sleep 1
-          done
-          if [[ "$i" -eq 30 ]]; then
-            echo "::error::Test server failed to start"
-            cat /tmp/server.log || true
-            exit 1
-          fi
-
-          cd artifacts/swift
-          SWIFT_XCTEST=$(find .build -name '*.xctest' -type f 2>/dev/null | head -1)
-          chmod +x "$SWIFT_XCTEST"
-
-          EXIT_CODE=1
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            if "$SWIFT_XCTEST" SignalRClientIntegrationTests.IntegrationTests; then
-              EXIT_CODE=0; break
-            fi
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
-
-          echo "--- Server log ---"
-          cat /tmp/server.log || true
-          kill $SERVER_PID 2>/dev/null || true
-          exit $EXIT_CODE
-
-  test-swift-macos:
-    name: Swift (macOS)
-    needs: build
-    runs-on: macos-14
-    steps:
-      - name: Checkout (for test server source)
-        uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: e2e-artifacts-stable
-          path: artifacts
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.0'
-
-      - name: Start test server (from source)
-        env:
-          Azure__SignalR__ConnectionString: ${{ secrets.E2E_CONNECTION_STRING }}
-          ASPNETCORE_URLS: http://localhost:8080
-        run: |
-          if [[ -z "${Azure__SignalR__ConnectionString:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
-            exit 0
-          fi
-          cd server
-          dotnet run -c Release -p:DefineConstants="USE_AZURE_SIGNALR" > /tmp/server.log 2>&1 &
-          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' "http://localhost:8080/test-swift" 2>/dev/null || true)
-            if [[ -n "$HTTP_CODE" && "$HTTP_CODE" != "000" ]]; then
-              echo "Server ready (HTTP $HTTP_CODE)"
-              break
-            fi
-            sleep 1
-          done
-
-      - name: Run Swift E2E tests
-        env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
-          SIGNALR_INTEGRATION_TEST_URL: http://localhost:8080/test-swift
-        run: |
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then exit 0; fi
-          cd artifacts/swift
-          rm -rf .build
-
-          EXIT_CODE=1
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            if swift test --filter SignalRClientIntegrationTests; then
-              EXIT_CODE=0; break
-            fi
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
-
-          echo "--- Server log ---"
-          cat /tmp/server.log || true
-          kill ${SERVER_PID:-0} 2>/dev/null || true
-          exit $EXIT_CODE
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  #  Summary — aggregate results and update badge
-  # ═══════════════════════════════════════════════════════════════════════════
-  summary:
-    name: Summary
-    needs: [test-dotnet-default, test-dotnet-serverless, test-java, test-swift-linux, test-swift-macos]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Calculate results
-        id: results
-        run: |
-          echo ""
-          echo "════════════════════════════════════════════════════════════"
-          echo "Client E2E (Stable SDK) — Summary"
-          echo "════════════════════════════════════════════════════════════"
-
-          echo ""
-          echo "── Individual job results ──"
-          echo "  .NET (Default Mode):    ${{ needs.test-dotnet-default.result }}"
-          echo "  .NET (Serverless Mode): ${{ needs.test-dotnet-serverless.result }}"
-          echo "  Java:                   ${{ needs.test-java.result }}"
-          echo "  Swift (Ubuntu):         ${{ needs.test-swift-linux.result }}"
-          echo "  Swift (macOS):          ${{ needs.test-swift-macos.result }}"
-
-          PASSED=0; TOTAL=5
-          [[ "${{ needs.test-dotnet-default.result }}" == "success" ]] && ((PASSED++)) || true
-          [[ "${{ needs.test-dotnet-serverless.result }}" == "success" ]] && ((PASSED++)) || true
-          [[ "${{ needs.test-java.result }}" == "success" ]] && ((PASSED++)) || true
-          [[ "${{ needs.test-swift-linux.result }}" == "success" ]] && ((PASSED++)) || true
-          [[ "${{ needs.test-swift-macos.result }}" == "success" ]] && ((PASSED++)) || true
-          echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
-          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
-          if [[ $PASSED -eq $TOTAL ]]; then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
-          elif [[ $PASSED -gt 0 ]]; then echo "color=yellow" >> "$GITHUB_OUTPUT"
-          else echo "color=red" >> "$GITHUB_OUTPUT"; fi
-
-          echo ""
-          echo "── Result: $PASSED/$TOTAL passed ──"
-          echo ""
-
-      - name: Job summary
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Stable SDK — ${{ steps.results.outputs.passed }}/${{ steps.results.outputs.total }} tests passed
-
-          | Test | Status |
-          |------|--------|
-          | .NET (Default Mode) | ${{ needs.test-dotnet-default.result == 'success' && '✅' || '❌' }} |
-          | .NET (Serverless Mode) | ${{ needs.test-dotnet-serverless.result == 'success' && '✅' || '❌' }} |
-          | Java | ${{ needs.test-java.result == 'success' && '✅' || '❌' }} |
-          | Swift (Ubuntu) | ${{ needs.test-swift-linux.result == 'success' && '✅' || '❌' }} |
-          | Swift (macOS) | ${{ needs.test-swift-macos.result == 'success' && '✅' || '❌' }} |
-          EOF
-
-      - name: Update badge
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PASSED=${{ steps.results.outputs.passed }}
-          TOTAL=${{ steps.results.outputs.total }}
-          COLOR=${{ steps.results.outputs.color }}
-
-          echo "── Updating stable badge on badges branch ──"
-          echo "  Badge content: ${PASSED}/${TOTAL} passed (color: ${COLOR})"
-
-          # Try to clone the badges branch; create it if it doesn't exist
-          git clone --single-branch --branch badges \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" \
-            badge-repo 2>/dev/null || {
-            echo "  ⚠ badges branch not found — creating new orphan branch"
-            mkdir -p badge-repo && cd badge-repo
-            git init && git checkout --orphan badges
-            git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
-            cd ..
-          }
-
-          cd badge-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          BADGE_JSON="{\"schemaVersion\":1,\"label\":\"Stable SDK\",\"message\":\"${PASSED}/${TOTAL} passed\",\"color\":\"${COLOR}\"}"
-          echo "$BADGE_JSON" > stable.json
-          echo "  Badge JSON: $BADGE_JSON"
-
-          git add stable.json
-          git diff --cached --quiet && echo "  (no change to badge)" || {
-            git commit -m "Update stable badge: ${PASSED}/${TOTAL} passed"
-            git push origin badges 2>/dev/null || git push --set-upstream origin badges
-            echo "  ✓ Badge pushed to badges branch"
-          }
+    uses: ./.github/workflows/test-e2e.yml
+    with:
+      artifact-name: e2e-artifacts-stable
+      sdk-label: "Stable SDK"
+      badge-file: stable.json
+    secrets: inherit
