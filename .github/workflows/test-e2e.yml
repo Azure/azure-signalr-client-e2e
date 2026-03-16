@@ -135,7 +135,7 @@ jobs:
           export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
           export ASPNETCORE_URLS="http://localhost:8080"
           export SIGNALR_INTEGRATION_TEST_URL="http://localhost:8080/test-java"
-          export ASRS_APP_NAME="java-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export ASRS_APP_NAME="java_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
           chmod +x artifacts/server/IntegrationTestServer || true
           artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
           SERVER_PID=$!
@@ -220,7 +220,7 @@ jobs:
 
           export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
           export ASPNETCORE_URLS="http://localhost:8080"
-          export ASRS_APP_NAME="swift-linux-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export ASRS_APP_NAME="swiftlinux_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
           chmod +x artifacts/server/IntegrationTestServer || true
           artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
           SERVER_PID=$!
@@ -292,7 +292,7 @@ jobs:
         env:
           Azure__SignalR__ConnectionString: ${{ secrets.E2E_CONNECTION_STRING }}
           ASPNETCORE_URLS: http://localhost:8080
-          ASRS_APP_NAME: swift-macos-${{ github.run_id }}-${{ github.run_attempt }}
+          ASRS_APP_NAME: swiftmacos_${{ github.run_id }}_${{ github.run_attempt }}
         run: |
           if [[ -z "${Azure__SignalR__ConnectionString:-}" ]]; then
             echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
