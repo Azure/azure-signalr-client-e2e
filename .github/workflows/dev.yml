@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  MAX_ATTEMPTS: 5
+  MAX_ATTEMPTS: 3
 
 jobs:
   # ═══════════════════════════════════════════════════════════════════════════

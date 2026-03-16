@@ -36,6 +36,10 @@ ok "test-server → $OUTPUT_DIR/server/"
 
 # ── .NET: build E2E tests from SDK submodule ─────────────────────────────────
 log "Building .NET E2E tests..."
+# Patch: inject unique AppName per test to isolate hub namespaces in Azure SignalR Service
+sed -i 's/await server\.StartAsync()/await server.StartAsync(new Dictionary<string, string> { { "AppName", $"e2e_{System.Guid.NewGuid():N}" } })/' \
+  "$REPO_ROOT/dotnet/test/Microsoft.Azure.SignalR.Tests.Common/E2ETest/ServiceE2EFactsBase.cs"
+log "Patched ServiceE2EFactsBase.cs with unique AppName per test"
 dotnet build \
   "$REPO_ROOT/dotnet/test/Microsoft.Azure.SignalR.E2ETests/Microsoft.Azure.SignalR.E2ETests.csproj" \
   -c Release
