@@ -40,6 +40,7 @@ jobs:
   test-dotnet:
     name: .NET (${{ matrix.mode }})
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.secret-env == 'serverless' && 15 || 5 }}
     strategy:
       fail-fast: false
       matrix:
