@@ -37,6 +37,7 @@ jobs:
       dotnet-version: ${{ steps.versions.outputs.dotnet }}
       java-version: ${{ steps.versions.outputs.java }}
       swift-version: ${{ steps.versions.outputs.swift }}
+      javascript-chatclient-version: ${{ steps.versions.outputs.javascript-chatclient }}
       has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
       - name: Checkout with submodules
@@ -97,11 +98,23 @@ jobs:
           echo "  [Swift] Filter: exclude preview|alpha|beta|rc, take first (newest)"
           echo "swift=$SWIFT_TAG" >> "$GITHUB_OUTPUT"
 
+          # Chat client: latest published version on npm. The package is still in
+          # internal preview, so there is no non-preview GA yet — resolve the
+          # `latest` dist-tag, falling back to `beta`, then to the newest version.
+          echo ""
+          echo "  [Chat] Querying npm registry for @azure/web-pubsub-chat-client..."
+          JAVASCRIPT_CHATCLIENT_VER=$(curl -s "https://registry.npmjs.org/@azure/web-pubsub-chat-client" \
+            | jq -r '(.["dist-tags"].latest // .["dist-tags"].beta) // (.versions | keys | last)')
+          echo "  [Chat] Resolved version: $JAVASCRIPT_CHATCLIENT_VER"
+          echo "  [Chat] Source: registry.npmjs.org/@azure/web-pubsub-chat-client"
+          echo "javascript-chatclient=$JAVASCRIPT_CHATCLIENT_VER" >> "$GITHUB_OUTPUT"
+
           echo ""
           echo "── Stable SDK Versions Summary ──"
           echo "  .NET:  $DOTNET_VER (NuGet, non-preview)"
           echo "  Java:  $JAVA_VER (Maven Central, non-preview)"
           echo "  Swift: $SWIFT_TAG (GitHub tag, non-preview)"
+          echo "  JavaScript: $JAVASCRIPT_CHATCLIENT_VER (npm)"
           echo ""
 
       - name: Check for changes since last release
@@ -112,6 +125,7 @@ jobs:
           DOTNET_VER="${{ steps.versions.outputs.dotnet }}"
           JAVA_VER="${{ steps.versions.outputs.java }}"
           SWIFT_TAG="${{ steps.versions.outputs.swift }}"
+          JAVASCRIPT_CHATCLIENT_VER="${{ steps.versions.outputs.javascript-chatclient }}"
 
           BODY=$(gh release view latest-stable --json body -q .body 2>/dev/null || echo "")
           if [[ -z "$BODY" ]]; then
@@ -124,10 +138,11 @@ jobs:
           echo "$BODY" | grep -qF "${DOTNET_VER}" || CHANGED=true
           echo "$BODY" | grep -qF "${JAVA_VER}" || CHANGED=true
           echo "$BODY" | grep -qF "${SWIFT_TAG}" || CHANGED=true
+          echo "$BODY" | grep -qF "${JAVASCRIPT_CHATCLIENT_VER}" || CHANGED=true
 
           if [[ "$CHANGED" == "true" ]]; then
             echo "── Stable SDK versions changed ──"
-            echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG"
+            echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG | JavaScript: $JAVASCRIPT_CHATCLIENT_VER"
             echo "has-changes=true" >> "$GITHUB_OUTPUT"
           else
             echo "── No changes in stable SDK versions ──"
@@ -150,7 +165,7 @@ jobs:
         run: |
           echo ""
           echo "── .NET SDK: Checking out stable tag ──"
-          cd dotnet
+          cd signalrservice/dotnet
           echo "  Fetching tags from origin..."
           git fetch --tags origin
           DOTNET_VER="${{ steps.versions.outputs.dotnet }}"
@@ -177,10 +192,10 @@ jobs:
           echo ""
           echo "── Java SDK: Updating pom.xml to stable version ──"
           JAVA_VER="${{ steps.versions.outputs.java }}"
-          BEFORE=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          BEFORE=$(grep -A1 '<artifactId>signalr</artifactId>' signalrservice/java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
           echo "  Before: $BEFORE"
-          sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${JAVA_VER}</version>|}" java/pom.xml
-          AFTER=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${JAVA_VER}</version>|}" signalrservice/java/pom.xml
+          AFTER=$(grep -A1 '<artifactId>signalr</artifactId>' signalrservice/java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
           echo "  After:  $AFTER"
           if [[ "$BEFORE" == "$AFTER" ]]; then
             echo "  (no change — already at stable version)"
@@ -193,7 +208,7 @@ jobs:
         run: |
           echo ""
           echo "── Swift SDK: Checking out stable tag ──"
-          cd swift
+          cd signalrservice/swift
           echo "  Fetching tags from origin..."
           git fetch --tags origin
           SWIFT_TAG="${{ steps.versions.outputs.swift }}"
@@ -228,8 +243,17 @@ jobs:
         with:
           swift-version: '6.0'
 
+      - name: Setup Node.js
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Build all artifacts
         if: steps.check.outputs.has-changes == 'true'
+        env:
+          JAVASCRIPT_CHATCLIENT_SDK_SOURCE: npm
+          JAVASCRIPT_CHATCLIENT_SDK_VERSION: ${{ steps.versions.outputs.javascript-chatclient }}
         run: |
           chmod +x ./build-artifacts.sh
           ./build-artifacts.sh ./artifacts
@@ -282,6 +306,7 @@ jobs:
           DOTNET_VER=${{ needs.build.outputs.dotnet-version }}
           JAVA_VER=${{ needs.build.outputs.java-version }}
           SWIFT_TAG=${{ needs.build.outputs.swift-version }}
+          JAVASCRIPT_CHATCLIENT_VER=${{ needs.build.outputs.javascript-chatclient-version }}
 
           {
             echo '### Stable SDK Versions'
@@ -291,6 +316,7 @@ jobs:
             echo "| .NET | [\`Microsoft.Azure.SignalR@${DOTNET_VER}\`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/${DOTNET_VER}) | NuGet |"
             echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
             echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |"
+            echo "| JavaScript (WebPubSub chat client) | [\`@azure/web-pubsub-chat-client@${JAVASCRIPT_CHATCLIENT_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client/v/${JAVASCRIPT_CHATCLIENT_VER}) | npm |"
           } > release-notes.md
 
           echo "  Release notes:"
