@@ -111,11 +111,11 @@ jobs:
           echo "Commit: ${{ github.sha }}"
           echo "════════════════════════════════════════════════════════════"
 
-          DOTNET_SHA=$(git -C dotnet rev-parse --short HEAD)
-          DOTNET_FULL=$(git -C dotnet rev-parse HEAD)
-          SWIFT_SHA=$(git -C swift rev-parse --short HEAD)
-          SWIFT_FULL=$(git -C swift rev-parse HEAD)
-          JAVA_VER=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml \
+          DOTNET_SHA=$(git -C signalrservice/dotnet rev-parse --short HEAD)
+          DOTNET_FULL=$(git -C signalrservice/dotnet rev-parse HEAD)
+          SWIFT_SHA=$(git -C signalrservice/swift rev-parse --short HEAD)
+          SWIFT_FULL=$(git -C signalrservice/swift rev-parse HEAD)
+          JAVA_VER=$(grep -A1 '<artifactId>signalr</artifactId>' signalrservice/java/pom.xml \
             | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
           JAVASCRIPT_CHATCLIENT_SHA=$(git -C webpubsub/azure-webpubsub rev-parse --short HEAD)
           JAVASCRIPT_CHATCLIENT_FULL=$(git -C webpubsub/azure-webpubsub rev-parse HEAD)
