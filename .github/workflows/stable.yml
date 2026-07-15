@@ -44,6 +44,7 @@ jobs:
       java-version: ${{ steps.versions.outputs.java }}
       swift-version: ${{ steps.versions.outputs.swift }}
       javascript-chatclient-version: ${{ steps.versions.outputs.javascript-chatclient }}
+      javascript-socketio-version: ${{ steps.versions.outputs.javascript-socketio }}
       has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
       - name: Checkout with submodules
@@ -115,12 +116,22 @@ jobs:
           echo "  [Chat] Source: registry.npmjs.org/@azure/web-pubsub-chat-client"
           echo "javascript-chatclient=$JAVASCRIPT_CHATCLIENT_VER" >> "$GITHUB_OUTPUT"
 
+          # Socket.IO extension: latest published version on npm.
+          echo ""
+          echo "  [Socket.IO] Querying npm registry for @azure/web-pubsub-socket.io..."
+          JAVASCRIPT_SOCKETIO_VER=$(curl -s "https://registry.npmjs.org/@azure/web-pubsub-socket.io" \
+            | jq -r '(.["dist-tags"].latest // .["dist-tags"].beta) // (.versions | keys | last)')
+          echo "  [Socket.IO] Resolved version: $JAVASCRIPT_SOCKETIO_VER"
+          echo "  [Socket.IO] Source: registry.npmjs.org/@azure/web-pubsub-socket.io"
+          echo "javascript-socketio=$JAVASCRIPT_SOCKETIO_VER" >> "$GITHUB_OUTPUT"
+
           echo ""
           echo "── Stable SDK Versions Summary ──"
           echo "  .NET:  $DOTNET_VER (NuGet, non-preview)"
           echo "  Java:  $JAVA_VER (Maven Central, non-preview)"
           echo "  Swift: $SWIFT_TAG (GitHub tag, non-preview)"
           echo "  JavaScript: $JAVASCRIPT_CHATCLIENT_VER (npm)"
+          echo "  JavaScript (Socket.IO): $JAVASCRIPT_SOCKETIO_VER (npm)"
           echo ""
 
       - name: Check for changes since last release
@@ -132,6 +143,7 @@ jobs:
           JAVA_VER="${{ steps.versions.outputs.java }}"
           SWIFT_TAG="${{ steps.versions.outputs.swift }}"
           JAVASCRIPT_CHATCLIENT_VER="${{ steps.versions.outputs.javascript-chatclient }}"
+          JAVASCRIPT_SOCKETIO_VER="${{ steps.versions.outputs.javascript-socketio }}"
 
           BODY=$(gh release view latest-stable --json body -q .body 2>/dev/null || echo "")
           if [[ -z "$BODY" ]]; then
@@ -145,10 +157,11 @@ jobs:
           echo "$BODY" | grep -qF "${JAVA_VER}" || CHANGED=true
           echo "$BODY" | grep -qF "${SWIFT_TAG}" || CHANGED=true
           echo "$BODY" | grep -qF "${JAVASCRIPT_CHATCLIENT_VER}" || CHANGED=true
+          echo "$BODY" | grep -qF "${JAVASCRIPT_SOCKETIO_VER}" || CHANGED=true
 
           if [[ "$CHANGED" == "true" ]]; then
             echo "── Stable SDK versions changed ──"
-            echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG | JavaScript: $JAVASCRIPT_CHATCLIENT_VER"
+            echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG | JavaScript: $JAVASCRIPT_CHATCLIENT_VER | Socket.IO: $JAVASCRIPT_SOCKETIO_VER"
             echo "has-changes=true" >> "$GITHUB_OUTPUT"
           else
             echo "── No changes in stable SDK versions ──"
@@ -260,6 +273,8 @@ jobs:
         env:
           JAVASCRIPT_CHATCLIENT_SDK_SOURCE: npm
           JAVASCRIPT_CHATCLIENT_SDK_VERSION: ${{ steps.versions.outputs.javascript-chatclient }}
+          JAVASCRIPT_SOCKETIO_SDK_SOURCE: npm
+          JAVASCRIPT_SOCKETIO_SDK_VERSION: ${{ steps.versions.outputs.javascript-socketio }}
         run: |
           chmod +x ./build-artifacts.sh
           ./build-artifacts.sh ./artifacts
@@ -313,6 +328,7 @@ jobs:
           JAVA_VER=${{ needs.build.outputs.java-version }}
           SWIFT_TAG=${{ needs.build.outputs.swift-version }}
           JAVASCRIPT_CHATCLIENT_VER=${{ needs.build.outputs.javascript-chatclient-version }}
+          JAVASCRIPT_SOCKETIO_VER=${{ needs.build.outputs.javascript-socketio-version }}
 
           {
             echo '### Stable SDK Versions'
@@ -323,6 +339,7 @@ jobs:
             echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
             echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |"
             echo "| JavaScript (WebPubSub chat client) | [\`@azure/web-pubsub-chat-client@${JAVASCRIPT_CHATCLIENT_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client/v/${JAVASCRIPT_CHATCLIENT_VER}) | npm |"
+            echo "| JavaScript (WebPubSub Socket.IO extension) | [\`@azure/web-pubsub-socket.io@${JAVASCRIPT_SOCKETIO_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io/v/${JAVASCRIPT_SOCKETIO_VER}) | npm |"
           } > release-notes.md
 
           echo "  Release notes:"

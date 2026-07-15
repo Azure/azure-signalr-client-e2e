@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ###############################################################################
 #  Build all client E2E test artifacts                                       #
-#  (server, .NET, Java, Swift, JavaScript WebPubSub chat client).            #
+#  (server, .NET, Java, Swift, JavaScript WebPubSub chat client + Socket.IO). #
 #                                                                            #
 #  Usage:                                                                    #
 #    ./build-artifacts.sh [OUTPUT_DIR]                                       #
@@ -126,6 +126,58 @@ mkdir -p "$OUTPUT_DIR/webpubsub/javascript/chatclient"
 # tests run offline from the artifact package.
 cp -r "$REPO_ROOT/webpubsub/javascript/chatclient/." "$OUTPUT_DIR/webpubsub/javascript/chatclient/"
 ok "JavaScript WebPubSub chat client tests → $OUTPUT_DIR/webpubsub/javascript/chatclient/"
+
+# ── JavaScript — WebPubSub Socket.IO extension: build test harness ───────────
+# The Socket.IO extension E2E suite is the SDK's own test suite (the exact one
+# run by Azure/azure-webpubsub's "Socket.IO E2E test" pipeline). It is a real
+# Socket.IO server backed by Azure Web PubSub, exercised by real socket.io
+# clients through the service, run with mocha + ts-node.
+# Version source is selected via JAVASCRIPT_SOCKETIO_SDK_SOURCE:
+#   submodule (default) → build @azure/web-pubsub-socket.io from the webpubsub
+#                         submodule (dev): build server-proxies + the extension,
+#                         npm pack it, and install into the harness.
+#   npm                 → install the published package from npm (stable),
+#                         optionally pinned to JAVASCRIPT_SOCKETIO_SDK_VERSION.
+log "Building JavaScript WebPubSub Socket.IO extension tests..."
+JAVASCRIPT_SOCKETIO_SDK_SOURCE="${JAVASCRIPT_SOCKETIO_SDK_SOURCE:-submodule}"
+(
+  cd "$REPO_ROOT/webpubsub/javascript/socketio"
+  npm install
+  if [[ "$JAVASCRIPT_SOCKETIO_SDK_SOURCE" == "submodule" ]]; then
+    SDK_ROOT="$REPO_ROOT/webpubsub/azure-webpubsub/sdk"
+    EXT_DIR="$SDK_ROOT/webpubsub-socketio-extension"
+    log "  Socket.IO extension SDK: building from webpubsub submodule (dev) → $EXT_DIR"
+    # server-proxies is a project reference of the extension's tsconfig; its
+    # deps must be installed so `tsc -b` can build it during the extension build.
+    (
+      cd "$SDK_ROOT/server-proxies"
+      npm install
+    )
+    (
+      cd "$EXT_DIR"
+      npm install
+      npm run build
+    )
+    TARBALL=$(cd "$EXT_DIR" && npm pack | tail -1)
+    log "  Socket.IO extension SDK: installing packed tarball $TARBALL"
+    npm install "$EXT_DIR/$TARBALL" --no-save --no-audit --no-fund
+  else
+    JAVASCRIPT_SOCKETIO_SDK_VERSION="${JAVASCRIPT_SOCKETIO_SDK_VERSION:-}"
+    if [[ -n "$JAVASCRIPT_SOCKETIO_SDK_VERSION" ]]; then
+      log "  Socket.IO extension SDK: installing @azure/web-pubsub-socket.io@${JAVASCRIPT_SOCKETIO_SDK_VERSION} from npm (stable)"
+      npm install "@azure/web-pubsub-socket.io@${JAVASCRIPT_SOCKETIO_SDK_VERSION}"
+    else
+      log "  Socket.IO extension SDK: using version pinned in webpubsub/javascript/socketio/package.json (stable)"
+    fi
+  fi
+)
+# Copy the SDK's own test suite from the submodule (single source of truth) and
+# rewrite its SDK-source imports to the package name.
+log "  preparing JavaScript WebPubSub Socket.IO extension tests from submodule..."
+bash "$REPO_ROOT/webpubsub/javascript/socketio/prepare-tests.sh"
+mkdir -p "$OUTPUT_DIR/webpubsub/javascript/socketio"
+cp -r "$REPO_ROOT/webpubsub/javascript/socketio/." "$OUTPUT_DIR/webpubsub/javascript/socketio/"
+ok "JavaScript WebPubSub Socket.IO extension tests → $OUTPUT_DIR/webpubsub/javascript/socketio/"
 
 # ── Copy run script into artifact package ────────────────────────────────────
 log "Bundling run-from-artifacts.sh..."

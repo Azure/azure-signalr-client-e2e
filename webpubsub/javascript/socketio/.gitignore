@@ -1,0 +1,9 @@
+node_modules/
+package-lock.json
+*.log
+*.tgz
+
+# Integration tests are copied from the webpubsub submodule at build time by
+# prepare-tests.sh (single source of truth = the Socket.IO extension SDK's own
+# tests). They are generated, not checked in.
+tests/
