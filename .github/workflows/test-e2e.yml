@@ -456,6 +456,11 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
+          # actions/upload-artifact strips executable bits, so the bundled esbuild
+          # (used by tsx to transpile the TS suite) and CLI shims lose +x. Restore.
+          chmod +x node_modules/@esbuild/*/bin/esbuild 2>/dev/null || true
+          chmod +x node_modules/.bin/* 2>/dev/null || true
+
           # The SDK-owned suite drives a real Socket.IO server backed by Azure
           # Web PubSub, exercised by real socket.io clients through the service.
           # It requires a hub named eio_hub configured on the resource.
