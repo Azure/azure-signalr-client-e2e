@@ -16,6 +16,11 @@ on:
     types: [completed]
     branches: [master]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force a full rebuild even if HEAD is unchanged since the last release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -58,7 +63,10 @@ jobs:
         id: check
         run: |
           git fetch --tags origin 2>/dev/null || true
-          if git rev-parse latest-dev >/dev/null 2>&1; then
+          if [[ "${{ github.event.inputs.force_rebuild }}" == "true" ]]; then
+            echo "── Force rebuild requested — rebuilding regardless of HEAD ──"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+          elif git rev-parse latest-dev >/dev/null 2>&1; then
             LATEST=$(git rev-parse latest-dev)
             CURRENT=$(git rev-parse HEAD)
             if [[ "$LATEST" == "$CURRENT" ]]; then

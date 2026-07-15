@@ -18,6 +18,11 @@ on:
     types: [completed]
     branches: [master]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force a full rebuild even if SDK versions are unchanged (use after harness/test-infra changes)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -144,6 +149,12 @@ jobs:
           SWIFT_TAG="${{ steps.versions.outputs.swift }}"
           JAVASCRIPT_CHATCLIENT_VER="${{ steps.versions.outputs.javascript-chatclient }}"
           JAVASCRIPT_SOCKETIO_VER="${{ steps.versions.outputs.javascript-socketio }}"
+
+          if [[ "${{ github.event.inputs.force_rebuild }}" == "true" ]]; then
+            echo "── Force rebuild requested — rebuilding regardless of SDK versions ──"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           BODY=$(gh release view latest-stable --json body -q .body 2>/dev/null || echo "")
           if [[ -z "$BODY" ]]; then
