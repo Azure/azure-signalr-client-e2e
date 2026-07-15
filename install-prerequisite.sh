@@ -33,7 +33,7 @@ Usage: $0
 Install prerequisites for running run-all-tests.sh (no command-line options).
 
 Environment:
-  E2E_CONNECTION_STRING must be set before running tests (NOT installed here).
+  E2E_SIGNALR_CONNECTION_STRING_DEFAULT must be set before running tests (NOT installed here).
 
 Notes:
   1. Script primarily supports Debian/Ubuntu via apt. Other distros get guidance only.
@@ -213,13 +213,47 @@ ensure_swift() {
   fi
 }
 
+ensure_node() {
+  # Node.js 20+ is required for the JavaScript WebPubSub chat client E2E tests (run via tsx).
+  if command -v node >/dev/null 2>&1; then
+    local node_ver major
+    node_ver=$(node --version 2>/dev/null | sed 's/^v//')
+    major=${node_ver%%.*}
+    if [[ -n "$major" && "$major" -ge 20 ]]; then
+      ok "Node.js already installed: v${node_ver}"
+      return
+    fi
+    warn "Node.js v${node_ver} found but < 20. Please upgrade to Node.js 20+."
+  fi
+
+  if [[ "$PKG_MGR" == "apt" ]]; then
+    log "Installing Node.js 20 via NodeSource"
+    if command -v sudo >/dev/null 2>&1 || [[ $EUID -eq 0 ]]; then
+      local SUDO=""
+      [[ $EUID -ne 0 ]] && SUDO="sudo"
+      if curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - ; then
+        $SUDO DEBIAN_FRONTEND=noninteractive apt-get install ${APT_YES_FLAG} nodejs || \
+          warn "Installing 'nodejs' failed; please install Node.js 20+ manually."
+      else
+        warn "NodeSource setup failed; please install Node.js 20+ manually."
+      fi
+    else
+      warn "sudo not available; cannot install Node.js. Please install Node.js 20+ manually."
+    fi
+  else
+    warn "Install Node.js 20+ manually (https://nodejs.org/)."
+  fi
+}
+
 # ------------------------ Execution ------------------------------------
 log "Starting prerequisite installation"
 ensure_java
 ensure_maven
 ensure_dotnet
 ensure_swift
+ensure_node
 
 ok "All prerequisite steps completed."
-log "Verify with: javac -version && mvn -v && swift --version || true"
-log "Remember to export E2E_CONNECTION_STRING before running ./run-all-tests.sh"
+log "Verify with: javac -version && mvn -v && swift --version && node --version || true"
+log "Remember to export E2E_SIGNALR_CONNECTION_STRING_DEFAULT before running ./run-all-tests.sh"
+log "For the JavaScript WebPubSub chat client suite, also export E2E_WEBPUBSUB_CHAT_CONNECTION_STRING"

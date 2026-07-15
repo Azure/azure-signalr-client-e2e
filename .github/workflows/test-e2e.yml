@@ -22,9 +22,11 @@ on:
         required: true
         type: string
     secrets:
-      E2E_CONNECTION_STRING:
+      E2E_SIGNALR_CONNECTION_STRING_DEFAULT:
         required: false
-      E2E_CONNECTION_STRING_SERVERLESS:
+      E2E_SIGNALR_CONNECTION_STRING_SERVERLESS:
+        required: false
+      E2E_WEBPUBSUB_CHAT_CONNECTION_STRING:
         required: false
 
 permissions:
@@ -40,7 +42,7 @@ jobs:
   test-dotnet:
     name: .NET (${{ matrix.mode }})
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.secret-env == 'serverless' && 15 || 5 }}
+    timeout-minutes: ${{ matrix.secret-env == 'serverless' && 25 || 5 }}
     strategy:
       fail-fast: false
       matrix:
@@ -63,10 +65,16 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup .NET 11 (preview)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
       - name: Run .NET E2E tests
         env:
-          E2E_CS_DEFAULT: ${{ secrets.E2E_CONNECTION_STRING }}
-          E2E_CS_SERVERLESS: ${{ secrets.E2E_CONNECTION_STRING_SERVERLESS }}
+          E2E_CS_DEFAULT: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
+          E2E_CS_SERVERLESS: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_SERVERLESS }}
           SECRET_ENV: ${{ matrix.secret-env }}
         run: |
           if [[ "$SECRET_ENV" == "default" ]]; then
@@ -78,7 +86,7 @@ jobs:
             echo "::warning::Connection string secret not set – skipping"
             exit 0
           fi
-          DOTNET_DLL=$(find artifacts/dotnet -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
+          DOTNET_DLL=$(find artifacts/signalrservice/dotnet -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
           if [[ -z "$DOTNET_DLL" ]]; then
             echo "::error::.NET test DLL not found"
             exit 1
@@ -124,21 +132,21 @@ jobs:
 
       - name: Run Java E2E tests
         env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
+          E2E_SIGNALR_CONNECTION_STRING_DEFAULT: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
         run: |
           set -euo pipefail
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
+          if [[ -z "${E2E_SIGNALR_CONNECTION_STRING_DEFAULT:-}" ]]; then
+            echo "::warning::E2E_SIGNALR_CONNECTION_STRING_DEFAULT secret not set – skipping"
             exit 0
           fi
 
           # Start test server with unique app name for hub isolation
-          export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
+          export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
           export ASPNETCORE_URLS="http://localhost:8080"
           export SIGNALR_INTEGRATION_TEST_URL="http://localhost:8080/test-java"
           export ASRS_APP_NAME="java_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          chmod +x artifacts/server/IntegrationTestServer || true
-          artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
+          chmod +x artifacts/signalrservice/server/IntegrationTestServer || true
+          artifacts/signalrservice/server/IntegrationTestServer > /tmp/server.log 2>&1 &
           SERVER_PID=$!
 
           for i in {1..30}; do
@@ -155,7 +163,7 @@ jobs:
             exit 1
           fi
 
-          cd artifacts/java
+          cd artifacts/signalrservice/java
           MAIN_JAR=$(find target -maxdepth 1 -name '*.jar' | head -1)
           DEP_JARS=$(find target/dependency -name '*.jar' 2>/dev/null | tr '\n' ':')
           CLASSPATH="${MAIN_JAR}:${DEP_JARS}target/test-classes"
@@ -204,26 +212,26 @@ jobs:
 
       - name: Build Swift tests from source
         run: |
-          cd artifacts/swift
+          cd artifacts/signalrservice/swift
           rm -rf .build
           swift build --build-tests
 
       - name: Run Swift E2E tests
         env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
+          E2E_SIGNALR_CONNECTION_STRING_DEFAULT: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
           SIGNALR_INTEGRATION_TEST_URL: http://localhost:8080/test-swift
         run: |
           set -euo pipefail
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
+          if [[ -z "${E2E_SIGNALR_CONNECTION_STRING_DEFAULT:-}" ]]; then
+            echo "::warning::E2E_SIGNALR_CONNECTION_STRING_DEFAULT secret not set – skipping"
             exit 0
           fi
 
-          export Azure__SignalR__ConnectionString="${E2E_CONNECTION_STRING}"
+          export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
           export ASPNETCORE_URLS="http://localhost:8080"
           export ASRS_APP_NAME="swiftlinux_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          chmod +x artifacts/server/IntegrationTestServer || true
-          artifacts/server/IntegrationTestServer > /tmp/server.log 2>&1 &
+          chmod +x artifacts/signalrservice/server/IntegrationTestServer || true
+          artifacts/signalrservice/server/IntegrationTestServer > /tmp/server.log 2>&1 &
           SERVER_PID=$!
 
           for i in {1..30}; do
@@ -240,7 +248,7 @@ jobs:
             exit 1
           fi
 
-          cd artifacts/swift
+          cd artifacts/signalrservice/swift
           SWIFT_XCTEST=$(find .build -name '*.xctest' -type f 2>/dev/null | head -1)
           chmod +x "$SWIFT_XCTEST"
 
@@ -291,15 +299,15 @@ jobs:
 
       - name: Start test server (from source)
         env:
-          Azure__SignalR__ConnectionString: ${{ secrets.E2E_CONNECTION_STRING }}
+          Azure__SignalR__ConnectionString: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
           ASPNETCORE_URLS: http://localhost:8080
           ASRS_APP_NAME: swiftmacos_${{ github.run_id }}_${{ github.run_attempt }}
         run: |
           if [[ -z "${Azure__SignalR__ConnectionString:-}" ]]; then
-            echo "::warning::E2E_CONNECTION_STRING secret not set – skipping"
+            echo "::warning::E2E_SIGNALR_CONNECTION_STRING_DEFAULT secret not set – skipping"
             exit 0
           fi
-          cd server
+          cd signalrservice/server
           dotnet run -c Release -p:DefineConstants="USE_AZURE_SIGNALR" > /tmp/server.log 2>&1 &
           echo "SERVER_PID=$!" >> "$GITHUB_ENV"
           for i in {1..30}; do
@@ -313,11 +321,11 @@ jobs:
 
       - name: Run Swift E2E tests
         env:
-          E2E_CONNECTION_STRING: ${{ secrets.E2E_CONNECTION_STRING }}
+          E2E_SIGNALR_CONNECTION_STRING_DEFAULT: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
           SIGNALR_INTEGRATION_TEST_URL: http://localhost:8080/test-swift
         run: |
-          if [[ -z "${E2E_CONNECTION_STRING:-}" ]]; then exit 0; fi
-          cd artifacts/swift
+          if [[ -z "${E2E_SIGNALR_CONNECTION_STRING_DEFAULT:-}" ]]; then exit 0; fi
+          cd artifacts/signalrservice/swift
           rm -rf .build
 
           EXIT_CODE=1
@@ -340,22 +348,96 @@ jobs:
           exit $EXIT_CODE
 
   # ═══════════════════════════════════════════════════════════════════════════
+  #  JavaScript — WebPubSub chat client (Ubuntu)
+  # ═══════════════════════════════════════════════════════════════════════════
+  test-javascript-chatclient:
+    name: JavaScript (WebPubSub Chat Client)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: artifacts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run JavaScript WebPubSub chat client E2E tests
+        env:
+          E2E_WEBPUBSUB_CHAT_CONNECTION_STRING: ${{ secrets.E2E_WEBPUBSUB_CHAT_CONNECTION_STRING }}
+        run: |
+          set -uo pipefail
+          if [[ -z "${E2E_WEBPUBSUB_CHAT_CONNECTION_STRING:-}" ]]; then
+            echo "::warning::E2E_WEBPUBSUB_CHAT_CONNECTION_STRING secret not set – skipping"
+            exit 0
+          fi
+
+          cd artifacts/webpubsub/javascript/chatclient
+          # node_modules are bundled in the artifact; reinstall only if missing.
+          if [[ ! -d node_modules ]]; then
+            npm install --no-audit --no-fund
+          fi
+
+          # actions/upload-artifact strips executable bits, so the bundled esbuild
+          # native binary (used by tsx to run the tests) loses +x. Restore it.
+          chmod +x node_modules/@esbuild/*/bin/esbuild 2>/dev/null || true
+          chmod +x node_modules/.bin/* 2>/dev/null || true
+
+          node server.mjs > /tmp/chat-server.log 2>&1 &
+          SERVER_PID=$!
+          for i in {1..30}; do
+            if curl -sf -o /dev/null "http://localhost:3000/negotiate?userId=probe" 2>/dev/null; then
+              echo "Negotiate server ready"
+              break
+            fi
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "::error::Negotiate server exited unexpectedly"
+              cat /tmp/chat-server.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          EXIT_CODE=1
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
+            if npm test; then
+              EXIT_CODE=0; break
+            fi
+            echo "Attempt $attempt failed."
+            if [ $attempt -lt $MAX_ATTEMPTS ]; then
+              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
+              echo "Retrying in ${WAIT}s..."
+              sleep $WAIT
+            fi
+          done
+
+          echo "--- Negotiate server log ---"
+          cat /tmp/chat-server.log || true
+          kill $SERVER_PID 2>/dev/null || true
+          exit $EXIT_CODE
+
+  # ═══════════════════════════════════════════════════════════════════════════
   #  Summary
   # ═══════════════════════════════════════════════════════════════════════════
   summary:
     name: Summary
-    needs: [test-dotnet, test-java, test-swift-linux, test-swift-macos]
+    needs: [test-dotnet, test-java, test-swift-linux, test-swift-macos, test-javascript-chatclient]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Calculate results
         id: results
         run: |
-          PASSED=0; TOTAL=4
+          PASSED=0; TOTAL=5
           [[ "${{ needs.test-dotnet.result }}" == "success" ]] && ((PASSED++)) || true
           [[ "${{ needs.test-java.result }}" == "success" ]] && ((PASSED++)) || true
           [[ "${{ needs.test-swift-linux.result }}" == "success" ]] && ((PASSED++)) || true
           [[ "${{ needs.test-swift-macos.result }}" == "success" ]] && ((PASSED++)) || true
+          [[ "${{ needs.test-javascript-chatclient.result }}" == "success" ]] && ((PASSED++)) || true
           echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
           echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
           if [[ $PASSED -eq $TOTAL ]]; then echo "color=brightgreen" >> "$GITHUB_OUTPUT"
@@ -373,6 +455,7 @@ jobs:
           | Java | ${{ needs.test-java.result == 'success' && '✅' || '❌' }} |
           | Swift (Ubuntu) | ${{ needs.test-swift-linux.result == 'success' && '✅' || '❌' }} |
           | Swift (macOS) | ${{ needs.test-swift-macos.result == 'success' && '✅' || '❌' }} |
+          | JavaScript (WebPubSub Chat Client) | ${{ needs.test-javascript-chatclient.result == 'success' && '✅' || '❌' }} |
           EOF
 
       - name: Update badge
