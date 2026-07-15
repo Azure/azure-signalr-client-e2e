@@ -89,6 +89,7 @@ jobs:
           dotnet-version: '11.0.x'
           dotnet-quality: 'preview'
 
+      - name: Setup JDK 21
         if: steps.check.outputs.has-changes == 'true'
         uses: actions/setup-java@v5
         with:
