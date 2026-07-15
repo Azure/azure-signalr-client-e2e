@@ -375,6 +375,11 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
+          # actions/upload-artifact strips executable bits, so the bundled esbuild
+          # native binary (used by tsx to run the tests) loses +x. Restore it.
+          chmod +x node_modules/@esbuild/*/bin/esbuild 2>/dev/null || true
+          chmod +x node_modules/.bin/* 2>/dev/null || true
+
           node server.mjs > /tmp/chat-server.log 2>&1 &
           SERVER_PID=$!
           for i in {1..30}; do
