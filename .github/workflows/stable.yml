@@ -22,6 +22,12 @@ on:
 permissions:
   contents: write
 
+# Serialize runs of this workflow so overlapping runs (e.g. a manual dispatch
+# racing a Sync Submodules trigger) don't clobber the shared latest-stable release.
+concurrency:
+  group: ${{ github.workflow }}-release
+  cancel-in-progress: false
+
 env:
   MAX_ATTEMPTS: 3
 
