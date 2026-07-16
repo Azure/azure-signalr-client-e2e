@@ -107,6 +107,28 @@ else
   fi
 fi
 
+echo "==> Running JavaScript WebPubSub Socket.IO extension tests..."
+if [ -z "${E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING:-}" ]; then
+  echo "⚠️  E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING not set — skipping JavaScript WebPubSub Socket.IO extension tests"
+else
+  (
+    cd "$REPO_ROOT/webpubsub/javascript/socketio"
+    export WebPubSubConnectionString="${E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING}"
+    export WebPubSubHub="${WEBPUBSUB_SOCKETIO_HUB:-eio_hub}"
+    export SocketIoPort="${SOCKETIO_PORT:-3000}"
+    bash prepare-tests.sh
+    npm install --no-audit --no-fund
+    npm test
+  )
+  socketio_status=$?
+  if [[ $socketio_status -ne 0 ]]; then
+    echo "JavaScript WebPubSub Socket.IO extension tests failed with exit code ${socketio_status}"
+    failures=1
+  else
+    echo "JavaScript WebPubSub Socket.IO extension tests passed"
+  fi
+fi
+
 if [[ $failures -ne 0 ]]; then
   echo "==> Summary: at least one test suite failed. See logs above."
   exit -1

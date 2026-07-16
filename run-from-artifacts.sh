@@ -15,6 +15,10 @@
 #    E2E_WEBPUBSUB_CHAT_CONNECTION_STRING - Azure Web PubSub connection string      #
 #                                     (JavaScript chat client suite; the      #
 #                                      suite is skipped when unset)           #
+#    E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING - Azure Web PubSub connection    #
+#                                     string (JavaScript Socket.IO extension   #
+#                                      suite; skipped when unset. Requires a    #
+#                                      hub named eio_hub on the resource)       #
 #                                                                            #
 #  Runtimes required on the machine consuming the artifact:                  #
 #    .NET 8 runtime, JDK 21 + Maven, Swift toolchain, Node.js 20+, curl.     #
@@ -27,6 +31,7 @@
 #      signalrservice/java/pom.xml         - Maven POM for surefire runner    #
 #      signalrservice/swift/.build/        - built Swift test binaries        #
 #      webpubsub/javascript/chatclient/    - WebPubSub chat client harness     #
+#      webpubsub/javascript/socketio/      - WebPubSub Socket.IO ext harness    #
 ###############################################################################
 set -uo pipefail
 
@@ -202,6 +207,37 @@ if [[ -d "$ARTIFACT_DIR/webpubsub/javascript/chatclient" ]]; then
   fi
 else
   fail "JavaScript WebPubSub chat client artifacts not found, skipping"
+  failures=1
+fi
+
+# ── JavaScript — WebPubSub Socket.IO extension tests (from pre-built harness) ─
+if [[ -d "$ARTIFACT_DIR/webpubsub/javascript/socketio" ]]; then
+  if [[ -z "${E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING:-}" ]]; then
+    log "E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING not set — skipping JavaScript WebPubSub Socket.IO extension tests"
+  else
+    log "Running JavaScript WebPubSub Socket.IO extension tests..."
+    (
+      cd "$ARTIFACT_DIR/webpubsub/javascript/socketio"
+      export WebPubSubConnectionString="${E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING}"
+      export WebPubSubHub="${WEBPUBSUB_SOCKETIO_HUB:-eio_hub}"
+      export SocketIoPort="${SOCKETIO_PORT:-3000}"
+      # node_modules are bundled in the artifact; reinstall only if missing.
+      if [[ ! -d node_modules ]]; then
+        log "node_modules missing — installing dependencies..."
+        npm install --no-audit --no-fund
+      fi
+      npm test
+    )
+    socketio_status=$?
+    if [[ $socketio_status -ne 0 ]]; then
+      fail "JavaScript WebPubSub Socket.IO extension tests failed (exit $socketio_status)"
+      failures=1
+    else
+      ok "JavaScript WebPubSub Socket.IO extension tests passed"
+    fi
+  fi
+else
+  fail "JavaScript WebPubSub Socket.IO extension artifacts not found, skipping"
   failures=1
 fi
 
