@@ -214,7 +214,7 @@ ensure_swift() {
 }
 
 ensure_node() {
-  # Node.js 20+ is required for the JavaScript WebPubSub chat client E2E tests (run via tsx).
+  # Node.js 20+ is required for the JavaScript WebPubSub chat client and Socket.IO extension E2E tests.
   if command -v node >/dev/null 2>&1; then
     local node_ver major
     node_ver=$(node --version 2>/dev/null | sed 's/^v//')
@@ -257,3 +257,4 @@ ok "All prerequisite steps completed."
 log "Verify with: javac -version && mvn -v && swift --version && node --version || true"
 log "Remember to export E2E_SIGNALR_CONNECTION_STRING_DEFAULT before running ./run-all-tests.sh"
 log "For the JavaScript WebPubSub chat client suite, also export E2E_WEBPUBSUB_CHAT_CONNECTION_STRING"
+log "For the JavaScript WebPubSub Socket.IO extension suite, also export E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING (Web PubSub resource with an 'eio_hub' hub)"

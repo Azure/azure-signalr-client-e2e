@@ -16,9 +16,20 @@ on:
     types: [completed]
     branches: [master]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force a full rebuild even if HEAD is unchanged since the last release"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+
+# Serialize runs of this workflow so overlapping runs (e.g. a manual dispatch
+# racing a Sync Submodules trigger) don't clobber the shared latest-dev release.
+concurrency:
+  group: ${{ github.workflow }}-release
+  cancel-in-progress: false
 
 env:
   MAX_ATTEMPTS: 3
@@ -39,6 +50,8 @@ jobs:
       swift-full: ${{ steps.versions.outputs.swift-full }}
       javascript-chatclient-version: ${{ steps.versions.outputs.javascript-chatclient }}
       javascript-chatclient-full: ${{ steps.versions.outputs.javascript-chatclient-full }}
+      javascript-socketio-version: ${{ steps.versions.outputs.javascript-socketio }}
+      javascript-socketio-full: ${{ steps.versions.outputs.javascript-socketio-full }}
       has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
       - name: Checkout with submodules
@@ -50,7 +63,10 @@ jobs:
         id: check
         run: |
           git fetch --tags origin 2>/dev/null || true
-          if git rev-parse latest-dev >/dev/null 2>&1; then
+          if [[ "${{ github.event.inputs.force_rebuild }}" == "true" ]]; then
+            echo "── Force rebuild requested — rebuilding regardless of HEAD ──"
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+          elif git rev-parse latest-dev >/dev/null 2>&1; then
             LATEST=$(git rev-parse latest-dev)
             CURRENT=$(git rev-parse HEAD)
             if [[ "$LATEST" == "$CURRENT" ]]; then
@@ -127,6 +143,9 @@ jobs:
           JAVASCRIPT_CHATCLIENT_SHA=$(git -C webpubsub/azure-webpubsub rev-parse --short HEAD)
           JAVASCRIPT_CHATCLIENT_FULL=$(git -C webpubsub/azure-webpubsub rev-parse HEAD)
           JAVASCRIPT_CHATCLIENT_PKG=$(grep '"version"' webpubsub/azure-webpubsub/sdk/webpubsub-chat-client/package.json | head -1 | sed 's/.*"version": *"\(.*\)".*/\1/')
+          JAVASCRIPT_SOCKETIO_SHA=$JAVASCRIPT_CHATCLIENT_SHA
+          JAVASCRIPT_SOCKETIO_FULL=$JAVASCRIPT_CHATCLIENT_FULL
+          JAVASCRIPT_SOCKETIO_PKG=$(grep '"version"' webpubsub/azure-webpubsub/sdk/webpubsub-socketio-extension/package.json | head -1 | sed 's/.*"version": *"\(.*\)".*/\1/')
 
           echo ""
           echo "── Dev SDK Versions ──"
@@ -138,6 +157,8 @@ jobs:
           echo "         source: dotnet/signalr-client-swift@dev submodule"
           echo "  JavaScript: $JAVASCRIPT_CHATCLIENT_SHA ($JAVASCRIPT_CHATCLIENT_FULL) [pkg $JAVASCRIPT_CHATCLIENT_PKG]"
           echo "         source: Azure/azure-webpubsub@main submodule (sdk/webpubsub-chat-client)"
+          echo "  JavaScript (Socket.IO): $JAVASCRIPT_SOCKETIO_SHA ($JAVASCRIPT_SOCKETIO_FULL) [pkg $JAVASCRIPT_SOCKETIO_PKG]"
+          echo "         source: Azure/azure-webpubsub@main submodule (sdk/webpubsub-socketio-extension)"
           echo ""
 
           echo "dotnet=$DOTNET_SHA" >> "$GITHUB_OUTPUT"
@@ -147,11 +168,14 @@ jobs:
           echo "java=$JAVA_VER" >> "$GITHUB_OUTPUT"
           echo "javascript-chatclient=$JAVASCRIPT_CHATCLIENT_SHA" >> "$GITHUB_OUTPUT"
           echo "javascript-chatclient-full=$JAVASCRIPT_CHATCLIENT_FULL" >> "$GITHUB_OUTPUT"
+          echo "javascript-socketio=$JAVASCRIPT_SOCKETIO_SHA" >> "$GITHUB_OUTPUT"
+          echo "javascript-socketio-full=$JAVASCRIPT_SOCKETIO_FULL" >> "$GITHUB_OUTPUT"
 
       - name: Build all artifacts
         if: steps.check.outputs.has-changes == 'true'
         env:
           JAVASCRIPT_CHATCLIENT_SDK_SOURCE: submodule
+          JAVASCRIPT_SOCKETIO_SDK_SOURCE: submodule
         run: |
           chmod +x ./build-artifacts.sh
           ./build-artifacts.sh ./artifacts
@@ -203,6 +227,8 @@ jobs:
           JAVA_VER=${{ needs.build.outputs.java-version }}
           JAVASCRIPT_CHATCLIENT_SHA=${{ needs.build.outputs.javascript-chatclient-version }}
           JAVASCRIPT_CHATCLIENT_FULL=${{ needs.build.outputs.javascript-chatclient-full }}
+          JAVASCRIPT_SOCKETIO_SHA=${{ needs.build.outputs.javascript-socketio-version }}
+          JAVASCRIPT_SOCKETIO_FULL=${{ needs.build.outputs.javascript-socketio-full }}
 
           {
             echo '### Dev SDK Versions'
@@ -213,6 +239,7 @@ jobs:
             echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
             echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
             echo "| JavaScript (WebPubSub chat client) | [\`Azure/azure-webpubsub@${JAVASCRIPT_CHATCLIENT_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_CHATCLIENT_FULL}) | Submodule (main branch) |"
+            echo "| JavaScript (WebPubSub Socket.IO extension) | [\`Azure/azure-webpubsub@${JAVASCRIPT_SOCKETIO_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_SOCKETIO_FULL}) | Submodule (main branch) |"
           } > release-notes.md
 
       - name: Publish GitHub Release
