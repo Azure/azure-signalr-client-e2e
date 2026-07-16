@@ -42,7 +42,7 @@ jobs:
           echo ""
           echo "── Current submodule commits (before sync) ──"
           git submodule foreach --quiet 'echo "  $name: $(git rev-parse --short HEAD)"'
-          CURRENT_JAVA=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          CURRENT_JAVA=$(grep -A1 '<artifactId>signalr</artifactId>' signalrservice/java/pom.xml | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
           echo "  java (pom.xml): $CURRENT_JAVA"
 
           echo ""
@@ -66,7 +66,7 @@ jobs:
           if [[ -n "$LATEST_JAVA" && "$LATEST_JAVA" != "null" ]]; then
             if [[ "$LATEST_JAVA" != "$CURRENT_JAVA" ]]; then
               echo "  → Updating Java SDK: $CURRENT_JAVA → $LATEST_JAVA"
-              sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${LATEST_JAVA}</version>|}" java/pom.xml
+              sed -i "/<artifactId>signalr<\/artifactId>/{n;s|<version>.*</version>|<version>${LATEST_JAVA}</version>|}" signalrservice/java/pom.xml
             else
               echo "  → Java SDK already up-to-date"
             fi

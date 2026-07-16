@@ -37,6 +37,8 @@ jobs:
       java-version: ${{ steps.versions.outputs.java }}
       swift-version: ${{ steps.versions.outputs.swift }}
       swift-full: ${{ steps.versions.outputs.swift-full }}
+      javascript-chatclient-version: ${{ steps.versions.outputs.javascript-chatclient }}
+      javascript-chatclient-full: ${{ steps.versions.outputs.javascript-chatclient-full }}
       has-changes: ${{ steps.check.outputs.has-changes }}
     steps:
       - name: Checkout with submodules
@@ -80,6 +82,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup .NET 11 (preview)
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
       - name: Setup JDK 21
         if: steps.check.outputs.has-changes == 'true'
         uses: actions/setup-java@v5
@@ -93,6 +102,12 @@ jobs:
         with:
           swift-version: '6.0'
 
+      - name: Setup Node.js
+        if: steps.check.outputs.has-changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Collect SDK versions
         if: steps.check.outputs.has-changes == 'true'
         id: versions
@@ -103,12 +118,15 @@ jobs:
           echo "Commit: ${{ github.sha }}"
           echo "════════════════════════════════════════════════════════════"
 
-          DOTNET_SHA=$(git -C dotnet rev-parse --short HEAD)
-          DOTNET_FULL=$(git -C dotnet rev-parse HEAD)
-          SWIFT_SHA=$(git -C swift rev-parse --short HEAD)
-          SWIFT_FULL=$(git -C swift rev-parse HEAD)
-          JAVA_VER=$(grep -A1 '<artifactId>signalr</artifactId>' java/pom.xml \
+          DOTNET_SHA=$(git -C signalrservice/dotnet rev-parse --short HEAD)
+          DOTNET_FULL=$(git -C signalrservice/dotnet rev-parse HEAD)
+          SWIFT_SHA=$(git -C signalrservice/swift rev-parse --short HEAD)
+          SWIFT_FULL=$(git -C signalrservice/swift rev-parse HEAD)
+          JAVA_VER=$(grep -A1 '<artifactId>signalr</artifactId>' signalrservice/java/pom.xml \
             | grep '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          JAVASCRIPT_CHATCLIENT_SHA=$(git -C webpubsub/azure-webpubsub rev-parse --short HEAD)
+          JAVASCRIPT_CHATCLIENT_FULL=$(git -C webpubsub/azure-webpubsub rev-parse HEAD)
+          JAVASCRIPT_CHATCLIENT_PKG=$(grep '"version"' webpubsub/azure-webpubsub/sdk/webpubsub-chat-client/package.json | head -1 | sed 's/.*"version": *"\(.*\)".*/\1/')
 
           echo ""
           echo "── Dev SDK Versions ──"
@@ -118,6 +136,8 @@ jobs:
           echo "         source: com.microsoft.signalr:signalr from pom.xml (Maven Central)"
           echo "  Swift: $SWIFT_SHA ($SWIFT_FULL)"
           echo "         source: dotnet/signalr-client-swift@dev submodule"
+          echo "  JavaScript: $JAVASCRIPT_CHATCLIENT_SHA ($JAVASCRIPT_CHATCLIENT_FULL) [pkg $JAVASCRIPT_CHATCLIENT_PKG]"
+          echo "         source: Azure/azure-webpubsub@main submodule (sdk/webpubsub-chat-client)"
           echo ""
 
           echo "dotnet=$DOTNET_SHA" >> "$GITHUB_OUTPUT"
@@ -125,9 +145,13 @@ jobs:
           echo "swift=$SWIFT_SHA" >> "$GITHUB_OUTPUT"
           echo "swift-full=$SWIFT_FULL" >> "$GITHUB_OUTPUT"
           echo "java=$JAVA_VER" >> "$GITHUB_OUTPUT"
+          echo "javascript-chatclient=$JAVASCRIPT_CHATCLIENT_SHA" >> "$GITHUB_OUTPUT"
+          echo "javascript-chatclient-full=$JAVASCRIPT_CHATCLIENT_FULL" >> "$GITHUB_OUTPUT"
 
       - name: Build all artifacts
         if: steps.check.outputs.has-changes == 'true'
+        env:
+          JAVASCRIPT_CHATCLIENT_SDK_SOURCE: submodule
         run: |
           chmod +x ./build-artifacts.sh
           ./build-artifacts.sh ./artifacts
@@ -177,6 +201,8 @@ jobs:
           SWIFT_SHA=${{ needs.build.outputs.swift-version }}
           SWIFT_FULL=${{ needs.build.outputs.swift-full }}
           JAVA_VER=${{ needs.build.outputs.java-version }}
+          JAVASCRIPT_CHATCLIENT_SHA=${{ needs.build.outputs.javascript-chatclient-version }}
+          JAVASCRIPT_CHATCLIENT_FULL=${{ needs.build.outputs.javascript-chatclient-full }}
 
           {
             echo '### Dev SDK Versions'
@@ -186,6 +212,7 @@ jobs:
             echo "| .NET | [\`Azure/azure-signalr@${DOTNET_SHA}\`](https://github.com/Azure/azure-signalr/commit/${DOTNET_FULL}) | Submodule (dev branch) |"
             echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
             echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
+            echo "| JavaScript (WebPubSub chat client) | [\`Azure/azure-webpubsub@${JAVASCRIPT_CHATCLIENT_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_CHATCLIENT_FULL}) | Submodule (main branch) |"
           } > release-notes.md
 
       - name: Publish GitHub Release
