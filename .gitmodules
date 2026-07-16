@@ -1,9 +1,13 @@
 [submodule "swift"]
-	path = swift
+	path = signalrservice/swift
 	url = https://github.com/dotnet/signalr-client-swift
 	branch = dev
 
 [submodule "dotnet"]
-	path = dotnet
+	path = signalrservice/dotnet
 	url = https://github.com/Azure/azure-signalr.git
 	branch = dev
+[submodule "webpubsub"]
+	path = webpubsub/azure-webpubsub
+	url = https://github.com/Azure/azure-webpubsub.git
+	branch = main
