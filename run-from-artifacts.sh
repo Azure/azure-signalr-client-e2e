@@ -21,7 +21,7 @@
 #                                      hub named eio_hub on the resource)       #
 #                                                                            #
 #  Runtimes required on the machine consuming the artifact:                  #
-#    .NET 8 runtime, JDK 21 + Maven, Swift toolchain, Node.js 20+, curl.     #
+#    .NET 8 runtime, JDK 21 + Maven, Swift toolchain, Node.js 22+, curl.     #
 #    Matching .NET and ASP.NET Core runtimes for net8.0 and, when included,  #
 #    net11.0 test artifacts.                                                 #
 #                                                                            #

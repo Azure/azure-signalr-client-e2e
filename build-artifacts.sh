@@ -7,7 +7,7 @@
 #    ./build-artifacts.sh [OUTPUT_DIR]                                       #
 #                                                                            #
 #  OUTPUT_DIR defaults to ./artifacts if not supplied.                        #
-#  Prerequisites: .NET 8 SDK, JDK 21 + Maven, Swift toolchain, Node.js 20+.  #
+#  Prerequisites: .NET 8 SDK, JDK 21 + Maven, Swift toolchain, Node.js 22+.  #
 ###############################################################################
 set -euo pipefail
 
@@ -156,6 +156,9 @@ JAVASCRIPT_SOCKETIO_SDK_SOURCE="${JAVASCRIPT_SOCKETIO_SDK_SOURCE:-submodule}"
     (
       cd "$EXT_DIR"
       npm install
+      # tsd also provides a tsc binary; use the SDK's TypeScript compiler explicitly.
+      npm pkg set 'scripts.build:src=node ./node_modules/typescript/bin/tsc -b tsconfig.esm.json && node ./node_modules/typescript/bin/tsc -b tsconfig.json'
+      node ./node_modules/typescript/bin/tsc --version
       npm run build
     )
     TARBALL=$(cd "$EXT_DIR" && npm pack | tail -1)

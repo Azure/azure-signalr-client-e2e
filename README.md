@@ -86,7 +86,7 @@ git submodule update --init --recursive
 - Java JDK: OpenJDK 21
 - Maven: >= 3.6.3
 - Swift toolchain: >= 6.0
-- Node.js: >= 20 (JavaScript WebPubSub chat client and Socket.IO extension tests)
+- Node.js: >= 22 (JavaScript WebPubSub chat client and Socket.IO extension tests)
 
 You can either install them manually or run the provided script.
 - Automated install (Recommended): 
@@ -112,6 +112,8 @@ dotnet --version; javac -version; mvn -v | head -n1; swift --version; node --ver
 
 This compiles the test server, .NET / Java / Swift test binaries, and the JavaScript WebPubSub chat client and Socket.IO extension harnesses into `./artifacts/`.
 
+The Socket.IO source build explicitly uses the SDK's `typescript` compiler rather than the shared `tsc` executable, which can also be supplied by `tsd`'s older compiler dependency.
+
 By default the JavaScript WebPubSub chat client SDK is built from the `webpubsub` submodule (dev). To build against the published npm package instead, set `JAVASCRIPT_CHATCLIENT_SDK_SOURCE=npm` (optionally with `JAVASCRIPT_CHATCLIENT_SDK_VERSION=<version>`). The Socket.IO extension harness behaves the same way via `JAVASCRIPT_SOCKETIO_SDK_SOURCE=npm` (optionally with `JAVASCRIPT_SOCKETIO_SDK_VERSION=<version>`).
 
 ### 2. Run tests from artifacts
@@ -126,6 +128,8 @@ export E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING="<your-azure-web-pubsub-connecti
 ```
 
 The script starts a local test server, runs all test suites (Java, Swift, .NET, JavaScript WebPubSub chat client, JavaScript WebPubSub Socket.IO extension), and exits with a non-zero code if any suite fails.
+
+It always runs the .NET 8 E2E tests. If the artifact package includes `signalrservice/dotnet/net11.0/`, it also runs the .NET 11 Default Mode E2E tests. Install the matching .NET and ASP.NET Core runtimes for each included framework. Packages without .NET 11 artifacts remain supported; missing test DLLs or required runtimes cause a failure.
 
 > **Note:** .NET tests do **not** use the local test server. They spin up an in-process Kestrel server that connects directly to Azure SignalR Service via `AddAzureSignalR()`. Java and Swift tests connect through the local test server. The JavaScript WebPubSub chat client tests target **Azure Web PubSub** through their own local negotiate server and are **skipped** when `E2E_WEBPUBSUB_CHAT_CONNECTION_STRING` is not set. The JavaScript WebPubSub Socket.IO extension tests reuse the SDK's own mocha suite against **Azure Web PubSub** (requires an `eio_hub` hub) and are **skipped** when `E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING` is not set.
 
