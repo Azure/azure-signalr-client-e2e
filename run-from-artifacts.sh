@@ -22,11 +22,14 @@
 #                                                                            #
 #  Runtimes required on the machine consuming the artifact:                  #
 #    .NET 8 runtime, JDK 21 + Maven, Swift toolchain, Node.js 20+, curl.     #
+#    Matching .NET and ASP.NET Core runtimes for net8.0 and, when included,  #
+#    net11.0 test artifacts.                                                 #
 #                                                                            #
 #  Expected artifact layout:                                                 #
 #    <ARTIFACT_DIR>/                                                         #
 #      signalrservice/server/              - published .NET test-server       #
 #      signalrservice/dotnet/net8.0/       - built .NET E2E test DLLs         #
+#      signalrservice/dotnet/net11.0/      - optional .NET 11 E2E test DLLs   #
 #      signalrservice/java/target/         - compiled Java test classes       #
 #      signalrservice/java/pom.xml         - Maven POM for surefire runner    #
 #      signalrservice/swift/.build/        - built Swift test binaries        #
@@ -154,22 +157,35 @@ else
 fi
 
 # ── .NET tests (from pre-built DLLs) ────────────────────────────────────────
-DOTNET_DLL=$(find "$ARTIFACT_DIR/signalrservice/dotnet" -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
-if [[ -n "$DOTNET_DLL" ]]; then
-  log "Running .NET tests..."
-  export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
-  dotnet vstest "$DOTNET_DLL" --logger:"console;verbosity=normal"
+export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
+for FRAMEWORK in net8.0 net11.0; do
+  if [[ "$FRAMEWORK" == "net11.0" && ! -d "$ARTIFACT_DIR/signalrservice/dotnet/$FRAMEWORK" ]]; then
+    log ".NET 11 artifacts not included; running .NET 8 only."
+    continue
+  fi
+
+  DOTNET_DLL="$ARTIFACT_DIR/signalrservice/dotnet/$FRAMEWORK/Microsoft.Azure.SignalR.E2ETests.dll"
+  if [[ ! -f "$DOTNET_DLL" ]]; then
+    fail ".NET test DLL not found: $DOTNET_DLL"
+    failures=1
+    continue
+  fi
+
+  DOTNET_ARGS=(--logger:"console;verbosity=normal")
+  if [[ "$FRAMEWORK" == "net11.0" ]]; then
+    DOTNET_ARGS+=(--testcasefilter:"FullyQualifiedName!~Management")
+  fi
+
+  log "Running .NET tests ($FRAMEWORK)..."
+  dotnet vstest "$DOTNET_DLL" "${DOTNET_ARGS[@]}"
   dotnet_status=$?
   if [[ $dotnet_status -ne 0 ]]; then
-    fail ".NET tests failed (exit $dotnet_status)"
+    fail ".NET tests ($FRAMEWORK) failed (exit $dotnet_status)"
     failures=1
   else
-    ok ".NET tests passed"
+    ok ".NET tests ($FRAMEWORK) passed"
   fi
-else
-  fail ".NET test DLL not found, skipping"
-  failures=1
-fi
+done
 
 # ── JavaScript — WebPubSub chat client tests (from pre-built harness) ────────
 if [[ -d "$ARTIFACT_DIR/webpubsub/javascript/chatclient" ]]; then
