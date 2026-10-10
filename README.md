@@ -1,54 +1,57 @@
-# Azure SignalR Client E2E Tests
+# Azure Real-time Messaging Services E2E Tests
 
 [![Dev SDK](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Azure/azure-signalr-client-e2e/badges/dev.json&logo=github)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/dev.yml)
 [![Stable SDK](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Azure/azure-signalr-client-e2e/badges/stable.json&logo=github)](https://github.com/Azure/azure-signalr-client-e2e/actions/workflows/stable.yml)
 
-This repository hosts multiple-language client E2E tests for Azure's real-time messaging services. It helps verify that all language clients work correctly in a single pass. Its scope spans two services:
+This repository runs E2E tests for packages across Azure's real-time messaging services:
 
-- **Azure SignalR Service** — the .NET, Java, and Swift SignalR clients.
-- **Azure Web PubSub** — the JavaScript WebPubSub chat client and the Socket.IO extension.
+| Service | Covered Packages |
+|---------|------------------|
+| **Azure SignalR Service** | [.NET Server SDK](https://github.com/Azure/azure-signalr), [Java Client](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift Client](https://github.com/dotnet/signalr-client-swift/) |
+| **Azure Web PubSub** | [JavaScript Chat Client](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-chat-client), [JavaScript Socket.IO Extension](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-socketio-extension) |
 
 Despite the `azure-signalr` repository name (which predates the Web PubSub coverage), both services are covered here.
 
-Supported clients, grouped by service:
-
-- **Azure SignalR Service:** [.NET](https://github.com/Azure/azure-signalr), [Java](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/java/signalr), [Swift](https://github.com/dotnet/signalr-client-swift/)
-- **Azure Web PubSub:** [JavaScript chat client](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-chat-client) — see [`webpubsub/javascript/chatclient/README.md`](./webpubsub/javascript/chatclient/README.md); [JavaScript Socket.IO extension](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-socketio-extension) — see [`webpubsub/javascript/socketio/README.md`](./webpubsub/javascript/socketio/README.md)
-
 ## Test Coverage
 
-The client E2E testing aims to cover all combinitions of ASRS Runtime version and Client SDK version:
+The Azure SignalR Service E2E tests aim to cover all combinations of ASRS runtime and package versions:
 
-| | Client SDK (Dev) | Client SDK (Stable) |
+| | Package (Dev) | Package (Stable) |
 |:--|:--|:--|
 | **ASRS Runtime (Dev)** | Internal Pipeline | Internal Pipeline |
 | **ASRS Runtime (Production)** | GitHub CI | GitHub CI |
 
 > **This repository** covers the bottom row (GitHub CI). The top row is tested by an internal pipeline.
 >
-> **Scope note:** This matrix models the **Azure SignalR Service** clients (.NET / Java / Swift), whose runtime is Azure SignalR (ASRS). The **JavaScript WebPubSub clients** (chat client and Socket.IO extension) target **Azure Web PubSub** instead, so they run against the production Web PubSub service with their dev/stable SDK (dev = built from the `webpubsub` submodule, stable = the published npm package) and are not part of the ASRS-runtime matrix above.
+> This matrix covers **Azure SignalR Service packages** (.NET Server SDK, Java Client, and Swift Client) only. Web PubSub tests run against the production Web PubSub service, not the ASRS runtime.
+>
+> **.NET test frameworks:** .NET 8 runs in Default and Serverless Mode for both dev and stable SDKs. .NET 11 (preview) currently runs in Default Mode for the dev SDK only.
 
-## SDK version sources
+## Package version sources
 
-Each SDK is tested against both a **dev** and a **stable** version:
+Each package is tested against both a **dev** and a **stable** version:
 
-| Service | SDK | Dev version | Stable version |
-|---------|-----|-------------|----------------|
-| Azure SignalR Service | .NET | [`Azure/azure-signalr`](https://github.com/Azure/azure-signalr) `dev` branch | Latest stable (non-preview) on [NuGet](https://www.nuget.org/packages/Microsoft.Azure.SignalR) |
-| Azure SignalR Service | Java | Latest (including preview) on [Maven Central](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr) | Latest stable (non-preview) on [Maven Central](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr) |
-| Azure SignalR Service | Swift | [`dotnet/signalr-client-swift`](https://github.com/dotnet/signalr-client-swift) `dev` branch | Latest stable (non-preview) [GitHub tag](https://github.com/dotnet/signalr-client-swift/tags) |
-| Azure Web PubSub | JavaScript chat client | [`Azure/azure-webpubsub`](https://github.com/Azure/azure-webpubsub) `main` branch (`sdk/webpubsub-chat-client`, built from source) | Latest published [`@azure/web-pubsub-chat-client`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client) on npm |
-| Azure Web PubSub | JavaScript Socket.IO extension | [`Azure/azure-webpubsub`](https://github.com/Azure/azure-webpubsub) `main` branch (`sdk/webpubsub-socketio-extension`, built from source) | Latest published [`@azure/web-pubsub-socket.io`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io) on npm |
+| Service | Package | Dev version | Stable version |
+|---------|---------|-------------|----------------|
+| Azure SignalR Service | .NET Server SDK | [`Azure/azure-signalr`](https://github.com/Azure/azure-signalr) `dev` branch | Latest stable (non-preview) on [NuGet](https://www.nuget.org/packages/Microsoft.Azure.SignalR) (matching source tag) |
+| Azure SignalR Service | Java Client | Latest (including preview) on [Maven Central](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr) | Latest stable (non-preview) on [Maven Central](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr) |
+| Azure SignalR Service | Swift Client | [`dotnet/signalr-client-swift`](https://github.com/dotnet/signalr-client-swift) `dev` branch | Latest stable (non-preview) [GitHub tag](https://github.com/dotnet/signalr-client-swift/tags) |
+| Azure Web PubSub | JavaScript Chat Client | [`Azure/azure-webpubsub`](https://github.com/Azure/azure-webpubsub) `main` branch (`sdk/webpubsub-chat-client`, built from source) | Latest published [`@azure/web-pubsub-chat-client`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client) on npm |
+| Azure Web PubSub | JavaScript Socket.IO Extension | [`Azure/azure-webpubsub`](https://github.com/Azure/azure-webpubsub) `main` branch (`sdk/webpubsub-socketio-extension`, built from source) | Latest published [`@azure/web-pubsub-socket.io`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io) on npm |
 
-### Version examples
+The .NET E2E tests also reference [`Microsoft.AspNetCore.SignalR.Client`](https://github.com/dotnet/aspnetcore/tree/main/src/SignalR/clients/csharp/Client/src) from `dotnet/aspnetcore`. Its version is set by the upstream test project; this workflow does not independently switch the .NET Client between dev and stable versions.
 
-| Service | SDK | Dev version (example) | Stable version (example) |
-|---------|-----|----------------------|--------------------------|
-| Azure SignalR Service | .NET | [commit `8c944ee9`](https://github.com/Azure/azure-signalr/commit/8c944ee9) (GitHub) | [`1.33.0`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/1.33.0) (NuGet) |
-| Azure SignalR Service | Java | [`11.0.0-preview.1.26104.118`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/11.0.0-preview.1.26104.118) (Maven Central) | [`10.0.3`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/10.0.3) (Maven Central) |
-| Azure SignalR Service | Swift | [commit `dd96829`](https://github.com/dotnet/signalr-client-swift/commit/dd96829) (GitHub) | [tag `v1.0.0`](https://github.com/dotnet/signalr-client-swift/releases/tag/v1.0.0) (GitHub) |
-| Azure Web PubSub | JavaScript chat client | [`Azure/azure-webpubsub@main`](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-chat-client) (GitHub submodule) | [`1.0.0-beta.2`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client) (npm) |
-| Azure Web PubSub | JavaScript Socket.IO extension | [`Azure/azure-webpubsub@main`](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-socketio-extension) (GitHub submodule) | [`1.2.1`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io) (npm) |
+### Version references
+
+GitHub dev references follow moving branches; registry versions are examples.
+
+| Service | Package | Dev | Stable |
+|---------|---------|-----|--------|
+| Azure SignalR Service | .NET Server SDK | [`Azure/azure-signalr@dev`](https://github.com/Azure/azure-signalr/tree/dev) (GitHub submodule) | [`1.33.0`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/1.33.0) (NuGet) |
+| Azure SignalR Service | Java Client | [`11.0.0-preview.1.26104.118`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/11.0.0-preview.1.26104.118) (Maven Central) | [`10.0.3`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/10.0.3) (Maven Central) |
+| Azure SignalR Service | Swift Client | [`dotnet/signalr-client-swift@dev`](https://github.com/dotnet/signalr-client-swift/tree/dev) (GitHub submodule) | [tag `v1.0.0`](https://github.com/dotnet/signalr-client-swift/releases/tag/v1.0.0) (GitHub) |
+| Azure Web PubSub | JavaScript Chat Client | [`Azure/azure-webpubsub@main`](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-chat-client) (GitHub submodule) | [`1.0.0-beta.2`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client) (npm) |
+| Azure Web PubSub | JavaScript Socket.IO Extension | [`Azure/azure-webpubsub@main`](https://github.com/Azure/azure-webpubsub/tree/main/sdk/webpubsub-socketio-extension) (GitHub submodule) | [`1.2.1`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io) (npm) |
 
 The exact versions tested in each run are recorded in the release notes: [Dev SDK releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=dev-) · [Stable SDK releases](https://github.com/Azure/azure-signalr-client-e2e/releases?q=stable-).
 
@@ -68,7 +71,7 @@ Release notes record the exact SDK versions tested. Browse all: [Dev releases](h
 
 ## Cloning with submodules
 
-The Swift client, .NET SDK, and JavaScript WebPubSub SDKs (chat client and Socket.IO extension) are included as Git submodules. Always clone the repository with submodules enabled:
+The .NET Server SDK and Swift client are Git submodules. The Web PubSub packages (chat client and Socket.IO extension) come from the `webpubsub/azure-webpubsub` submodule. Always clone the repository with submodules enabled:
 
 ```bash
 git clone --recurse-submodules https://github.com/Azure/azure-signalr-client-e2e.git
