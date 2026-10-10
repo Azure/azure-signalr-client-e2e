@@ -42,7 +42,7 @@ code runs against either source; only the installed version differs.
 
 ## Prerequisites
 
-- Node.js 20+.
+- Node.js 22+.
 - An **Azure Web PubSub** resource with an `eio_hub` hub configured (the hub name the
   SDK test suite uses).
 

@@ -37,7 +37,7 @@ code runs against either source; only the installed version differs.
 
 ## Prerequisites
 
-- Node.js 20+ (for the built-in test runner used via `tsx`).
+- Node.js 22+ (for SDK dependencies and the built-in test runner used via `tsx`).
 - An **Azure Web PubSub** resource with:
   - Persistent Storage configured (Storage Account with Table enabled).
   - A `chat` hub with the Chat feature enabled, using that Persistent Storage.

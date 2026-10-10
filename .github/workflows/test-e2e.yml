@@ -42,18 +42,23 @@ jobs:
   #  .NET Tests (Default + Serverless via matrix)
   # ═══════════════════════════════════════════════════════════════════════════
   test-dotnet:
-    name: .NET (${{ matrix.mode }})
+    name: .NET ${{ matrix.dotnet-version }} (${{ matrix.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.secret-env == 'serverless' && 25 || 5 }}
     strategy:
       fail-fast: false
       matrix:
+        dotnet-version: ${{ fromJSON(inputs.artifact-name == 'e2e-artifacts-dev' && '["8.0", "11.0"]' || '["8.0"]') }}
+        mode: [Default Mode, Serverless Mode]
+        exclude:
+          - dotnet-version: '11.0'
+            mode: Serverless Mode
         include:
           - mode: Default Mode
-            filter: SignalRServiceE2EFacts
+            filter: FullyQualifiedName!~Management
             secret-env: default
           - mode: Serverless Mode
-            filter: Management
+            filter: FullyQualifiedName~Management
             secret-env: serverless
     steps:
       - name: Download artifacts
@@ -78,6 +83,8 @@ jobs:
           E2E_CS_DEFAULT: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_DEFAULT }}
           E2E_CS_SERVERLESS: ${{ secrets.E2E_SIGNALR_CONNECTION_STRING_SERVERLESS }}
           SECRET_ENV: ${{ matrix.secret-env }}
+          DOTNET_VERSION: ${{ matrix.dotnet-version }}
+          TEST_FILTER: ${{ matrix.filter }}
         run: |
           if [[ "$SECRET_ENV" == "default" ]]; then
             export Azure__SignalR__ConnectionString="${E2E_CS_DEFAULT}"
@@ -88,16 +95,16 @@ jobs:
             echo "::warning::Connection string secret not set – skipping"
             exit 0
           fi
-          DOTNET_DLL=$(find artifacts/signalrservice/dotnet -name 'Microsoft.Azure.SignalR.E2ETests.dll' -type f | head -1)
-          if [[ -z "$DOTNET_DLL" ]]; then
-            echo "::error::.NET test DLL not found"
+          DOTNET_DLL="artifacts/signalrservice/dotnet/net${DOTNET_VERSION}/Microsoft.Azure.SignalR.E2ETests.dll"
+          if [[ ! -f "$DOTNET_DLL" ]]; then
+            echo "::error::E2E test assembly not found: $DOTNET_DLL"
             exit 1
           fi
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
             echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            dotnet vstest "$DOTNET_DLL" \
-              --logger:"console;verbosity=normal" \
-              --testcasefilter:"FullyQualifiedName~${{ matrix.filter }}" && exit 0
+            if dotnet vstest "$DOTNET_DLL" --logger:"console;verbosity=normal" --testcasefilter:"${TEST_FILTER}"; then
+              exit 0
+            fi
             echo "Attempt $attempt failed."
             if [ $attempt -lt $MAX_ATTEMPTS ]; then
               WAIT=$(( (RANDOM % 11 + 5) * attempt ))
@@ -365,7 +372,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Run JavaScript WebPubSub chat client E2E tests
         env:
@@ -438,7 +445,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Run JavaScript WebPubSub Socket.IO extension E2E tests
         env:

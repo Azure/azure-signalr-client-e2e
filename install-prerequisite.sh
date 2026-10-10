@@ -214,34 +214,34 @@ ensure_swift() {
 }
 
 ensure_node() {
-  # Node.js 20+ is required for the JavaScript WebPubSub chat client and Socket.IO extension E2E tests.
+  # Node.js 22+ is required for the JavaScript WebPubSub chat client and Socket.IO extension E2E tests.
   if command -v node >/dev/null 2>&1; then
     local node_ver major
     node_ver=$(node --version 2>/dev/null | sed 's/^v//')
     major=${node_ver%%.*}
-    if [[ -n "$major" && "$major" -ge 20 ]]; then
+    if [[ -n "$major" && "$major" -ge 22 ]]; then
       ok "Node.js already installed: v${node_ver}"
       return
     fi
-    warn "Node.js v${node_ver} found but < 20. Please upgrade to Node.js 20+."
+    warn "Node.js v${node_ver} found but < 22. Please upgrade to Node.js 22+."
   fi
 
   if [[ "$PKG_MGR" == "apt" ]]; then
-    log "Installing Node.js 20 via NodeSource"
+    log "Installing Node.js 22 via NodeSource"
     if command -v sudo >/dev/null 2>&1 || [[ $EUID -eq 0 ]]; then
       local SUDO=""
       [[ $EUID -ne 0 ]] && SUDO="sudo"
-      if curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash - ; then
+      if curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - ; then
         $SUDO DEBIAN_FRONTEND=noninteractive apt-get install ${APT_YES_FLAG} nodejs || \
-          warn "Installing 'nodejs' failed; please install Node.js 20+ manually."
+          warn "Installing 'nodejs' failed; please install Node.js 22+ manually."
       else
-        warn "NodeSource setup failed; please install Node.js 20+ manually."
+        warn "NodeSource setup failed; please install Node.js 22+ manually."
       fi
     else
-      warn "sudo not available; cannot install Node.js. Please install Node.js 20+ manually."
+      warn "sudo not available; cannot install Node.js. Please install Node.js 22+ manually."
     fi
   else
-    warn "Install Node.js 20+ manually (https://nodejs.org/)."
+    warn "Install Node.js 22+ manually (https://nodejs.org/)."
   fi
 }
 
