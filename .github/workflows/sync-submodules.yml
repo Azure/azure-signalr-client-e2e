@@ -85,7 +85,32 @@ jobs:
           echo ""
 
           git add -A
-          git commit -m "chore: sync submodules and Java SDK to latest upstream"
+          components=()
+          changes=()
+          for entry in \
+            "signalrservice/dotnet:.NET submodule" \
+            "signalrservice/swift:Swift submodule" \
+            "webpubsub/azure-webpubsub:Web PubSub submodule"; do
+            path="${entry%%:*}"
+            label="${entry#*:}"
+            if ! git diff --cached --quiet -- "$path"; then
+              before=$(git rev-parse "HEAD:$path")
+              after=$(git rev-parse ":$path")
+              components+=("$label")
+              changes+=("$label ($path): $before -> $after")
+            fi
+          done
+          if ! git diff --cached --quiet -- signalrservice/java/pom.xml; then
+            components+=("Java SDK")
+            changes+=("Java SDK (signalrservice/java/pom.xml): $CURRENT_JAVA -> $LATEST_JAVA")
+          fi
+          if (( ${#components[@]} == 0 )); then
+            echo "::error::Changes detected but no SDK updates found"
+            exit 1
+          fi
+          printf -v summary '%s, ' "${components[@]}"
+          summary="${summary%, }"
+          git commit -m "chore: sync $summary" -m "$(printf '%s\n' "${changes[@]}")"
           echo "── Pushing to master ──"
           git push origin master
           echo "── Done ──"
