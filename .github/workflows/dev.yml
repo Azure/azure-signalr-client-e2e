@@ -148,7 +148,7 @@ jobs:
           JAVASCRIPT_SOCKETIO_PKG=$(grep '"version"' webpubsub/azure-webpubsub/sdk/webpubsub-socketio-extension/package.json | head -1 | sed 's/.*"version": *"\(.*\)".*/\1/')
 
           echo ""
-          echo "── Dev SDK Versions ──"
+          echo "── Dev Package Versions ──"
           echo "  .NET:  $DOTNET_SHA ($DOTNET_FULL)"
           echo "         source: Azure/azure-signalr@dev submodule"
           echo "  Java:  $JAVA_VER"
@@ -231,15 +231,15 @@ jobs:
           JAVASCRIPT_SOCKETIO_FULL=${{ needs.build.outputs.javascript-socketio-full }}
 
           {
-            echo '### Dev SDK Versions'
+            echo '### Dev Package Versions'
             echo ''
-            echo '| SDK | Version | Source |'
-            echo '|-----|---------|--------|'
-            echo "| .NET | [\`Azure/azure-signalr@${DOTNET_SHA}\`](https://github.com/Azure/azure-signalr/commit/${DOTNET_FULL}) | Submodule (dev branch) |"
-            echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
-            echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
-            echo "| JavaScript (WebPubSub chat client) | [\`Azure/azure-webpubsub@${JAVASCRIPT_CHATCLIENT_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_CHATCLIENT_FULL}) | Submodule (main branch) |"
-            echo "| JavaScript (WebPubSub Socket.IO extension) | [\`Azure/azure-webpubsub@${JAVASCRIPT_SOCKETIO_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_SOCKETIO_FULL}) | Submodule (main branch) |"
+            echo '| Package | Version | Source |'
+            echo '|---------|---------|--------|'
+            echo "| .NET Server SDK | [\`Azure/azure-signalr@${DOTNET_SHA}\`](https://github.com/Azure/azure-signalr/commit/${DOTNET_FULL}) | Submodule (dev branch) |"
+            echo "| Java Client | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
+            echo "| Swift Client | [\`dotnet/signalr-client-swift@${SWIFT_SHA}\`](https://github.com/dotnet/signalr-client-swift/commit/${SWIFT_FULL}) | Submodule (dev branch) |"
+            echo "| JavaScript Chat Client | [\`Azure/azure-webpubsub@${JAVASCRIPT_CHATCLIENT_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_CHATCLIENT_FULL}) | Submodule (main branch) |"
+            echo "| JavaScript Socket.IO Extension | [\`Azure/azure-webpubsub@${JAVASCRIPT_SOCKETIO_SHA}\`](https://github.com/Azure/azure-webpubsub/commit/${JAVASCRIPT_SOCKETIO_FULL}) | Submodule (main branch) |"
           } > release-notes.md
 
       - name: Publish GitHub Release
@@ -249,14 +249,14 @@ jobs:
           TAG="dev-$(date -u +%Y%m%d-%H%M%S)"
           echo "── Publishing GitHub Release ──"
           echo "  Tag:   $TAG"
-          echo "  Title: Client E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)"
+          echo "  Title: Azure Real-time Messaging E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)"
           echo ""
           echo "── Release Notes ──"
           cat release-notes.md
           echo ""
 
           gh release create "$TAG" \
-            --title "Client E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)" \
+            --title "Azure Real-time Messaging E2E Artifacts (Dev) - $(date -u +%Y%m%d-%H%M%S)" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-dev.tar.gz
@@ -270,7 +270,7 @@ jobs:
           git push origin latest-dev --force
           echo "  ✓ latest-dev tag moved to $(git rev-parse --short HEAD)"
           gh release create latest-dev \
-            --title "Client E2E Artifacts (Dev) - Latest" \
+            --title "Azure Real-time Messaging E2E Artifacts (Dev) - Latest" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-dev.tar.gz

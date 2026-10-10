@@ -131,7 +131,7 @@ jobs:
           echo "javascript-socketio=$JAVASCRIPT_SOCKETIO_VER" >> "$GITHUB_OUTPUT"
 
           echo ""
-          echo "── Stable SDK Versions Summary ──"
+          echo "── Stable Package Versions Summary ──"
           echo "  .NET:  $DOTNET_VER (NuGet, non-preview)"
           echo "  Java:  $JAVA_VER (Maven Central, non-preview)"
           echo "  Swift: $SWIFT_TAG (GitHub tag, non-preview)"
@@ -342,15 +342,15 @@ jobs:
           JAVASCRIPT_SOCKETIO_VER=${{ needs.build.outputs.javascript-socketio-version }}
 
           {
-            echo '### Stable SDK Versions'
+            echo '### Stable Package Versions'
             echo ''
-            echo '| SDK | Version | Source |'
-            echo '|-----|---------|--------|'
-            echo "| .NET | [\`Microsoft.Azure.SignalR@${DOTNET_VER}\`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/${DOTNET_VER}) | NuGet |"
-            echo "| Java | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
-            echo "| Swift | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |"
-            echo "| JavaScript (WebPubSub chat client) | [\`@azure/web-pubsub-chat-client@${JAVASCRIPT_CHATCLIENT_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client/v/${JAVASCRIPT_CHATCLIENT_VER}) | npm |"
-            echo "| JavaScript (WebPubSub Socket.IO extension) | [\`@azure/web-pubsub-socket.io@${JAVASCRIPT_SOCKETIO_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io/v/${JAVASCRIPT_SOCKETIO_VER}) | npm |"
+            echo '| Package | Version | Source |'
+            echo '|---------|---------|--------|'
+            echo "| .NET Server SDK | [\`Microsoft.Azure.SignalR@${DOTNET_VER}\`](https://www.nuget.org/packages/Microsoft.Azure.SignalR/${DOTNET_VER}) | NuGet |"
+            echo "| Java Client | [\`com.microsoft.signalr:signalr@${JAVA_VER}\`](https://central.sonatype.com/artifact/com.microsoft.signalr/signalr/${JAVA_VER}) | Maven Central |"
+            echo "| Swift Client | [\`dotnet/signalr-client-swift@${SWIFT_TAG}\`](https://github.com/dotnet/signalr-client-swift/releases/tag/${SWIFT_TAG}) | GitHub Release |"
+            echo "| JavaScript Chat Client | [\`@azure/web-pubsub-chat-client@${JAVASCRIPT_CHATCLIENT_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-chat-client/v/${JAVASCRIPT_CHATCLIENT_VER}) | npm |"
+            echo "| JavaScript Socket.IO Extension | [\`@azure/web-pubsub-socket.io@${JAVASCRIPT_SOCKETIO_VER}\`](https://www.npmjs.com/package/@azure/web-pubsub-socket.io/v/${JAVASCRIPT_SOCKETIO_VER}) | npm |"
           } > release-notes.md
 
           echo "  Release notes:"
@@ -360,7 +360,7 @@ jobs:
           echo "  Archive size: $ARCHIVE_SIZE"
 
           TAG="stable-$(date -u +%Y%m%d-%H%M%S)"
-          TITLE="Client E2E Artifacts (Stable) - $(date -u +%Y%m%d-%H%M%S)"
+          TITLE="Azure Real-time Messaging E2E Artifacts (Stable) - $(date -u +%Y%m%d-%H%M%S)"
           echo "  Tag:   $TAG"
           echo "  Title: $TITLE"
 
@@ -379,7 +379,7 @@ jobs:
           git push origin latest-stable --force
           echo "  ✓ latest-stable tag moved to $(git rev-parse --short HEAD)"
           gh release create latest-stable \
-            --title "Client E2E Artifacts (Stable) - Latest" \
+            --title "Azure Real-time Messaging E2E Artifacts (Stable) - Latest" \
             --notes-file release-notes.md \
             --latest=false \
             e2e-artifacts-stable.tar.gz
