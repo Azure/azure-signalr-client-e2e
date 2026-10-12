@@ -12,6 +12,7 @@
 #    E2E_SIGNALR_CONNECTION_STRING_DEFAULT          - Azure SignalR connection string         #
 #                                     (.NET / Java / Swift suites)            #
 #  Optional env:                                                             #
+#    E2E_SIGNALR_CONNECTION_STRING_SERVERLESS - Serverless Management tests  #
 #    E2E_WEBPUBSUB_CHAT_CONNECTION_STRING - Azure Web PubSub connection string      #
 #                                     (JavaScript chat client suite; the      #
 #                                      suite is skipped when unset)           #
@@ -83,7 +84,11 @@ echo ""
 log "Starting test-server from artifact..."
 export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
 export ASPNETCORE_URLS="http://localhost:8080"
-"$ARTIFACT_DIR/signalrservice/server/IntegrationTestServer" > "$ARTIFACT_DIR/signalrservice/server/test-server.log" 2>&1 &
+SERVER_APP_NAME="${ASRS_APP_NAME-}"
+if [[ -n "${E2E_SIGNALR_CONNECTION_STRING_SERVERLESS:-}" ]]; then
+  SERVER_APP_NAME=""
+fi
+ASRS_APP_NAME="$SERVER_APP_NAME" "$ARTIFACT_DIR/signalrservice/server/IntegrationTestServer" > "$ARTIFACT_DIR/signalrservice/server/test-server.log" 2>&1 &
 SERVER_PID=$!
 
 # Wait for server to be ready (SignalR hub returns 400 on plain GET, so we check for any HTTP response)
@@ -111,6 +116,11 @@ fi
 
 # ── Cleanup handler ──────────────────────────────────────────────────────────
 cleanup() {
+  if [[ -n "${APP_SERVER_PID:-}" ]]; then
+    log "Stopping Management app server (PID $APP_SERVER_PID)..."
+    kill "$APP_SERVER_PID" 2>/dev/null || true
+    wait "$APP_SERVER_PID" 2>/dev/null || true
+  fi
   log "Stopping test-server (PID $SERVER_PID)..."
   kill $SERVER_PID 2>/dev/null || true
   wait $SERVER_PID 2>/dev/null || true
@@ -158,6 +168,52 @@ fi
 
 # ── .NET tests (from pre-built DLLs) ────────────────────────────────────────
 export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
+
+run_dotnet_tests() {
+  local label="$1" dll="$2" filter="${3:-}"
+  local command=(dotnet vstest "$dll" --logger:"console;verbosity=normal")
+  if [[ -n "$filter" ]]; then
+    command+=(--testcasefilter:"$filter")
+  fi
+  log "Running .NET tests ($label)..."
+  if "${command[@]}"; then
+    ok ".NET tests ($label) passed"
+  else
+    fail ".NET tests ($label) failed"
+    failures=1
+  fi
+}
+
+if [[ -n "${E2E_SIGNALR_CONNECTION_STRING_SERVERLESS:-}" &&
+      -f "$ARTIFACT_DIR/signalrservice/dotnet/net8.0/Microsoft.Azure.SignalR.E2ETests.dll" ]]; then
+  HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/management-test 2>/dev/null || true)
+  if [[ -z "$HTTP_CODE" || "$HTTP_CODE" == "000" || "$HTTP_CODE" == "404" ]]; then
+    fail "Artifact test server is missing the Management hub required for Serverless test splitting."
+    exit 1
+  fi
+  log "Starting Management app server for the appName namespace..."
+  ASRS_APP_NAME=appName ASPNETCORE_URLS=http://localhost:8082 \
+    "$ARTIFACT_DIR/signalrservice/server/IntegrationTestServer" > "$ARTIFACT_DIR/signalrservice/server/management-app-server.log" 2>&1 &
+  APP_SERVER_PID=$!
+  for i in {1..30}; do
+    if ! kill -0 "$APP_SERVER_PID" 2>/dev/null; then
+      fail "Management app server exited unexpectedly."
+      cat "$ARTIFACT_DIR/signalrservice/server/management-app-server.log" >&2
+      exit 1
+    fi
+    HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8082/management-test 2>/dev/null || true)
+    if [[ -n "$HTTP_CODE" && "$HTTP_CODE" != "000" && "$HTTP_CODE" != "404" ]]; then
+      break
+    fi
+    sleep 1
+  done
+  if [[ -z "$HTTP_CODE" || "$HTTP_CODE" == "000" || "$HTTP_CODE" == "404" ]]; then
+    fail "Management app server did not expose the Management hub within 30 seconds."
+    cat "$ARTIFACT_DIR/signalrservice/server/management-app-server.log" >&2
+    exit 1
+  fi
+fi
+
 for FRAMEWORK in net8.0 net11.0; do
   if [[ "$FRAMEWORK" == "net11.0" && ! -d "$ARTIFACT_DIR/signalrservice/dotnet/$FRAMEWORK" ]]; then
     log ".NET 11 artifacts not included; running .NET 8 only."
@@ -171,19 +227,19 @@ for FRAMEWORK in net8.0 net11.0; do
     continue
   fi
 
-  DOTNET_ARGS=(--logger:"console;verbosity=normal")
   if [[ "$FRAMEWORK" == "net11.0" ]]; then
-    DOTNET_ARGS+=(--testcasefilter:"FullyQualifiedName!~Management")
-  fi
-
-  log "Running .NET tests ($FRAMEWORK)..."
-  dotnet vstest "$DOTNET_DLL" "${DOTNET_ARGS[@]}"
-  dotnet_status=$?
-  if [[ $dotnet_status -ne 0 ]]; then
-    fail ".NET tests ($FRAMEWORK) failed (exit $dotnet_status)"
-    failures=1
+    run_dotnet_tests "$FRAMEWORK Default Mode" "$DOTNET_DLL" 'FullyQualifiedName!~Management'
+  elif [[ -n "${E2E_SIGNALR_CONNECTION_STRING_SERVERLESS:-}" ]]; then
+    run_dotnet_tests "$FRAMEWORK Default Mode" "$DOTNET_DLL" 'FullyQualifiedName!~Management'
+    run_dotnet_tests "$FRAMEWORK Management Default Mode" "$DOTNET_DLL" \
+      'FullyQualifiedName~Management&(FullyQualifiedName~ServiceHubContextE2EFacts.ClientInvocation_|FullyQualifiedName~ServiceHubContextE2EFacts.CloseConnectionTest)'
+    export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_SERVERLESS}"
+    run_dotnet_tests "$FRAMEWORK Serverless Mode" "$DOTNET_DLL" \
+      'FullyQualifiedName~Management&FullyQualifiedName!~ServiceHubContextE2EFacts.ClientInvocation_&FullyQualifiedName!~ServiceHubContextE2EFacts.CloseConnectionTest'
+    export Azure__SignalR__ConnectionString="${E2E_SIGNALR_CONNECTION_STRING_DEFAULT}"
   else
-    ok ".NET tests ($FRAMEWORK) passed"
+    log "Serverless connection string not set; running all .NET 8 tests against Default Mode."
+    run_dotnet_tests "$FRAMEWORK Default Mode" "$DOTNET_DLL"
   fi
 done
 
@@ -208,7 +264,12 @@ if [[ -d "$ARTIFACT_DIR/webpubsub/javascript/chatclient" ]]; then
         curl -sf -o /dev/null "http://localhost:3000/negotiate?userId=probe" && break
         sleep 1
       done
-      npm test
+      if [[ -f ./run-tests.sh ]]; then
+        bash ./run-tests.sh
+      else
+        log "Older Chat Client artifact has no selective retry runner; using npm test."
+        npm test
+      fi
       status=$?
       kill $CHAT_PID 2>/dev/null || true
       exit $status

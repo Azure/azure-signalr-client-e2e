@@ -30,5 +30,6 @@ app.UseRouting();
 app.MapHub<TestHub>("/test");
 app.MapHub<TestHubJava>("/test-java");
 app.MapHub<TestHubSwift>("/test-swift");
+app.MapHub<ManagemnetTestHub>("/management-test");
 
 app.Run();

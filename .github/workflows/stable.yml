@@ -170,8 +170,20 @@ jobs:
           echo "$BODY" | grep -qF "${JAVASCRIPT_CHATCLIENT_VER}" || CHANGED=true
           echo "$BODY" | grep -qF "${JAVASCRIPT_SOCKETIO_VER}" || CHANGED=true
 
+          # The release also contains the harness and test workflow, not just SDKs.
+          # Rebuild it when either changes even if all stable SDK versions match.
+          HARNESS_CHANGES=$(git diff --name-only latest-stable HEAD -- \
+            build-artifacts.sh run-from-artifacts.sh .github/workflows/test-e2e.yml \
+            signalrservice/server signalrservice/java/src webpubsub/javascript \
+            webpubsub/azure-webpubsub)
+          if [[ -n "$HARNESS_CHANGES" ]]; then
+            echo "── Test harness changed since latest-stable release ──"
+            echo "$HARNESS_CHANGES"
+            CHANGED=true
+          fi
+
           if [[ "$CHANGED" == "true" ]]; then
-            echo "── Stable SDK versions changed ──"
+            echo "── Stable SDK versions or test harness changed ──"
             echo "  .NET: $DOTNET_VER | Java: $JAVA_VER | Swift: $SWIFT_TAG | JavaScript: $JAVASCRIPT_CHATCLIENT_VER | Socket.IO: $JAVASCRIPT_SOCKETIO_VER"
             echo "has-changes=true" >> "$GITHUB_OUTPUT"
           else
@@ -298,13 +310,13 @@ jobs:
           retention-days: 7
 
       - name: Package release tarball
-        if: steps.check.outputs.has-changes == 'true'
+        if: github.ref == 'refs/heads/master' && steps.check.outputs.has-changes == 'true'
         run: |
           tar -czf e2e-artifacts-stable.tar.gz -C artifacts .
           echo "Archive size: $(du -h e2e-artifacts-stable.tar.gz | cut -f1)"
 
       - name: Upload release tarball
-        if: steps.check.outputs.has-changes == 'true'
+        if: github.ref == 'refs/heads/master' && steps.check.outputs.has-changes == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-release-tarball-stable
@@ -317,7 +329,7 @@ jobs:
   release:
     name: Release
     needs: build
-    if: needs.build.outputs.has-changes == 'true'
+    if: github.ref == 'refs/heads/master' && needs.build.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -9,13 +9,13 @@
 #  Socket.IO server backed by Azure Web PubSub, exercised by real            #
 #  socket.io-clients through the service.                                      #
 #                                                                             #
-#  We copy the suite here verbatim and only rewrite the imports that reach    #
-#  into the SDK's internal source tree so the same tests run against either   #
-#  the source-packed (dev) or npm (stable) SDK:                               #
-#    - `../src`               -> @azure/web-pubsub-socket.io  (public entry)   #
+#  We copy the suite and rewrite imports into the SDK source tree so the      #
+#  same tests run against either the source-packed (dev) or npm (stable) SDK: #
+#    - `../src`               -> @azure/web-pubsub-socket.io (public entry)    #
 #    - `../src/common/utils`  -> public `NegotiateOptions` + an inline `debug` #
-#                                wrapper for `debugModule` (the only symbol    #
-#                                not part of the package's public surface).    #
+#                                wrapper for `debugModule`.                   #
+#    - `../src/...`           -> @azure/web-pubsub-socket.io/dist/...         #
+#                                (compiled internal modules in both packs).  #
 #                                                                             #
 #  Usage:                                                                      #
 #    ./prepare-tests.sh [SDK_TESTS_DIR]                                        #
@@ -47,9 +47,31 @@ while IFS= read -r -d '' f; do
     -e 's#import \{ debugModule \} from "(\.\./)+src/common/utils";#import createDebug from "debug";\nconst debugModule = (namespace: string) => createDebug(namespace);#' \
     -e 's#import "(\.\./)+src";#import "@azure/web-pubsub-socket.io";#' \
     -e 's#from "(\.\./)+src";#from "@azure/web-pubsub-socket.io";#' \
+    -e 's#from "(\.\./)+src/([^"]+)";#from "@azure/web-pubsub-socket.io/dist/\2";#' \
+    -e 's#^  it\.each\(\["invalid-json", "0\{\}"\]\)\("rejects an invalid handshake body: %s", async \(body\) => \{#  for (const body of ["invalid-json", "0{}"]) it(`rejects an invalid handshake body: ${body}`, async () => {#' \
     "$f" > "$f.tmp"
+  if grep -qE '(^|[^[:alnum:]_])jest(\.|[[:space:]]*$)' "$f.tmp"; then
+    sed -i '1i import * as jest from "jest-mock";' "$f.tmp"
+  fi
   mv "$f.tmp" "$f"
   count=$((count + 1))
 done < <(find "$HARNESS_DIR/tests" -name '*.ts' -print0)
 
-echo "  prepared $count test file(s) under tests/ (SDK-source imports rewritten to @azure/web-pubsub-socket.io)"
+if grep -R -nE "from [\"'](\.\./)+src(/|[\"'])" "$HARNESS_DIR/tests"; then
+  echo "ERROR: Socket.IO tests still import SDK source outside the artifact" >&2
+  exit 1
+fi
+
+if grep -R -nE '\b(it|test|describe)\.each\(' "$HARNESS_DIR/tests"; then
+  echo "ERROR: Socket.IO tests contain Jest-only parameterized cases unsupported by Mocha" >&2
+  exit 1
+fi
+
+while IFS= read -r module; do
+  if ! (cd "$HARNESS_DIR" && node -e 'require.resolve(process.argv[1])' "$module"); then
+    echo "ERROR: Socket.IO SDK package is missing $module" >&2
+    exit 1
+  fi
+done < <(grep -rhoE '@azure/web-pubsub-socket\.io/dist/[A-Za-z0-9_./-]+' "$HARNESS_DIR/tests" | sort -u)
+
+echo "  prepared $count test file(s) under tests/ (SDK-source imports rewritten to the packaged SDK)"

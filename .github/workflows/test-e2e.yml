@@ -58,8 +58,12 @@ jobs:
             filter: FullyQualifiedName!~Management
             secret-env: default
           - mode: Serverless Mode
-            filter: FullyQualifiedName~Management
+            filter: FullyQualifiedName~Management&FullyQualifiedName!~ServiceHubContextE2EFacts.ClientInvocation_&FullyQualifiedName!~ServiceHubContextE2EFacts.CloseConnectionTest
             secret-env: serverless
+          - dotnet-version: '8.0'
+            mode: Management Default Mode
+            filter: FullyQualifiedName~Management&(FullyQualifiedName~ServiceHubContextE2EFacts.ClientInvocation_|FullyQualifiedName~ServiceHubContextE2EFacts.CloseConnectionTest)
+            secret-env: default
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -85,6 +89,7 @@ jobs:
           SECRET_ENV: ${{ matrix.secret-env }}
           DOTNET_VERSION: ${{ matrix.dotnet-version }}
           TEST_FILTER: ${{ matrix.filter }}
+          TEST_MODE: ${{ matrix.mode }}
         run: |
           if [[ "$SECRET_ENV" == "default" ]]; then
             export Azure__SignalR__ConnectionString="${E2E_CS_DEFAULT}"
@@ -99,6 +104,32 @@ jobs:
           if [[ ! -f "$DOTNET_DLL" ]]; then
             echo "::error::E2E test assembly not found: $DOTNET_DLL"
             exit 1
+          fi
+          if [[ "$TEST_MODE" == "Management Default Mode" ]]; then
+            chmod +x artifacts/signalrservice/server/IntegrationTestServer
+            ASPNETCORE_URLS=http://localhost:8081 artifacts/signalrservice/server/IntegrationTestServer > /tmp/management-server.log 2>&1 &
+            SERVER_PID=$!
+            ASRS_APP_NAME=appName ASPNETCORE_URLS=http://localhost:8082 artifacts/signalrservice/server/IntegrationTestServer > /tmp/management-app-server.log 2>&1 &
+            APP_SERVER_PID=$!
+            trap 'kill "$SERVER_PID" "$APP_SERVER_PID" 2>/dev/null || true' EXIT
+            for i in {1..30}; do
+              if ! kill -0 "$SERVER_PID" 2>/dev/null || ! kill -0 "$APP_SERVER_PID" 2>/dev/null; then
+                echo "::error::Management app server exited unexpectedly"
+                cat /tmp/management-server.log /tmp/management-app-server.log
+                exit 1
+              fi
+              CODE1=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/management-test || true)
+              CODE2=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8082/management-test || true)
+              if [[ "$CODE1" != "000" && "$CODE2" != "000" ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ -z "$CODE1" || "$CODE1" == "000" || -z "$CODE2" || "$CODE2" == "000" ]]; then
+              echo "::error::Management app servers failed to start"
+              cat /tmp/management-server.log /tmp/management-app-server.log
+              exit 1
+            fi
           fi
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
             echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
@@ -286,6 +317,8 @@ jobs:
   test-swift-macos:
     name: Swift (macOS)
     runs-on: macos-14
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
     steps:
       - name: Checkout (for test server source)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -302,9 +335,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Setup Swift
-        uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
-        with:
-          swift-version: '6.0'
+        run: |
+          SWIFT_VERSION=$(swift --version)
+          echo "$SWIFT_VERSION"
+          if [[ "$SWIFT_VERSION" != Apple\ Swift\ version\ 6.0.* ]]; then
+            echo "::error::Expected Swift 6.0 from Xcode 16.2"
+            exit 1
+          fi
 
       - name: Start test server (from source)
         env:
@@ -410,19 +447,8 @@ jobs:
             sleep 1
           done
 
-          EXIT_CODE=1
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "=== Attempt $attempt / $MAX_ATTEMPTS ==="
-            if npm test; then
-              EXIT_CODE=0; break
-            fi
-            echo "Attempt $attempt failed."
-            if [ $attempt -lt $MAX_ATTEMPTS ]; then
-              WAIT=$(( (RANDOM % 11 + 5) * attempt ))
-              echo "Retrying in ${WAIT}s..."
-              sleep $WAIT
-            fi
-          done
+          bash ./run-tests.sh
+          EXIT_CODE=$?
 
           echo "--- Negotiate server log ---"
           cat /tmp/chat-server.log || true
@@ -531,6 +557,7 @@ jobs:
           EOF
 
       - name: Update badge
+        if: github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

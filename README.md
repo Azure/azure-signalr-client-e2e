@@ -25,7 +25,7 @@ The Azure SignalR Service E2E tests aim to cover all combinations of ASRS runtim
 >
 > This matrix covers **Azure SignalR Service packages** (.NET Server SDK, Java Client, and Swift Client) only. Web PubSub tests run against the production Web PubSub service, not the ASRS runtime.
 >
-> **.NET test frameworks:** .NET 8 runs in Default and Serverless Mode for both dev and stable SDKs. .NET 11 (preview) currently runs in Default Mode for the dev SDK only.
+> **.NET test frameworks:** .NET 8 runs in Default and Serverless Mode for both dev and stable SDKs. Management tests run against Serverless except for client invocation and close-connection assertions, which require a connected app server and therefore run against Default Mode with test servers for both the unnamed and `appName` namespaces. .NET 11 (preview) currently runs in Default Mode for the dev SDK only.
 
 ## Package version sources
 
@@ -57,7 +57,8 @@ The exact versions tested in each run are recorded in the release notes: [Dev SD
 
 ## Releases
 
-Each CI run publishes a **GitHub Release** containing pre-built test artifacts (`e2e-artifacts-{dev,stable}.tar.gz`). The archive includes the compiled test server, .NET / Java / Swift test binaries, the JavaScript WebPubSub chat client and Socket.IO extension harnesses (with `node_modules`), and `run-from-artifacts.sh` so tests can be re-run without rebuilding.
+When SDK or harness changes are detected on `master`, CI publishes a **GitHub Release** containing pre-built test artifacts (`e2e-artifacts-{dev,stable}.tar.gz`). The archive includes the compiled test server, .NET / Java / Swift test binaries, the JavaScript WebPubSub chat client and Socket.IO extension harnesses (with `node_modules`), and `run-from-artifacts.sh` so tests can be re-run without rebuilding.
+Existing relative paths inside the archive are a consumer contract: keep the test binaries, harness directories, package entry points, and release asset names in place. New helpers, such as `webpubsub/javascript/chatclient/run-tests.sh`, are additive.
 
 | Release | Description |
 |---------|-------------|
@@ -116,6 +117,7 @@ dotnet --version; javac -version; mvn -v | head -n1; swift --version; node --ver
 This compiles the test server, .NET / Java / Swift test binaries, and the JavaScript WebPubSub chat client and Socket.IO extension harnesses into `./artifacts/`.
 
 The Socket.IO source build explicitly uses the SDK's `typescript` compiler rather than the shared `tsc` executable, which can also be supplied by `tsd`'s older compiler dependency.
+The Socket.IO harness rewrites upstream test imports of SDK internals to the compiled `dist/` modules shipped in both dev and stable packages, adapts the upstream `it.each` cases to Mocha, and imports `jest-mock` for the upstream spy assertions. Unsupported imports or Jest-only parameterized cases fail artifact preparation rather than failing later in the test job. Dev builds align the harness's Socket.IO dependencies with the upstream SDK so both load the same server module; stable builds retain the published version's compatible pin. Each Mocha attempt stops at its first failure so an unavailable service does not stall the whole suite.
 
 By default the JavaScript WebPubSub chat client SDK is built from the `webpubsub` submodule (dev). To build against the published npm package instead, set `JAVASCRIPT_CHATCLIENT_SDK_SOURCE=npm` (optionally with `JAVASCRIPT_CHATCLIENT_SDK_VERSION=<version>`). The Socket.IO extension harness behaves the same way via `JAVASCRIPT_SOCKETIO_SDK_SOURCE=npm` (optionally with `JAVASCRIPT_SOCKETIO_SDK_VERSION=<version>`).
 
@@ -123,6 +125,8 @@ By default the JavaScript WebPubSub chat client SDK is built from the `webpubsub
 
 ```bash
 export E2E_SIGNALR_CONNECTION_STRING_DEFAULT="<your-azure-signalr-connection-string>"
+# Optional — runs .NET Management Serverless cases against a Serverless resource:
+export E2E_SIGNALR_CONNECTION_STRING_SERVERLESS="<your-serverless-signalr-connection-string>"
 # Optional — enables the JavaScript WebPubSub chat client suite:
 export E2E_WEBPUBSUB_CHAT_CONNECTION_STRING="<your-azure-web-pubsub-connection-string>"
 # Optional — enables the JavaScript WebPubSub Socket.IO extension suite (Web PubSub resource with an `eio_hub` hub):
@@ -131,10 +135,11 @@ export E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING="<your-azure-web-pubsub-connecti
 ```
 
 The script starts a local test server, runs all test suites (Java, Swift, .NET, JavaScript WebPubSub chat client, JavaScript WebPubSub Socket.IO extension), and exits with a non-zero code if any suite fails.
+The Chat Client harness runs the full upstream suite once, then retries only failing cases up to three attempts each; an unrecognized test-runner failure still fails the suite.
 
 It always runs the .NET 8 E2E tests. If the artifact package includes `signalrservice/dotnet/net11.0/`, it also runs the .NET 11 Default Mode E2E tests. Install the matching .NET and ASP.NET Core runtimes for each included framework. Packages without .NET 11 artifacts remain supported; missing test DLLs or required runtimes cause a failure.
 
-> **Note:** .NET tests do **not** use the local test server. They spin up an in-process Kestrel server that connects directly to Azure SignalR Service via `AddAzureSignalR()`. Java and Swift tests connect through the local test server. The JavaScript WebPubSub chat client tests target **Azure Web PubSub** through their own local negotiate server and are **skipped** when `E2E_WEBPUBSUB_CHAT_CONNECTION_STRING` is not set. The JavaScript WebPubSub Socket.IO extension tests reuse the SDK's own mocha suite against **Azure Web PubSub** (requires an `eio_hub` hub) and are **skipped** when `E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING` is not set.
+> **Note:** Most .NET CI tests spin up an in-process Kestrel server; the Management Default Mode cases also start local app servers for their hub. When `E2E_SIGNALR_CONNECTION_STRING_SERVERLESS` is set, the artifact runner uses its existing unnamed app server plus an `appName` server to mirror the CI Management split; otherwise it retains its Default-only .NET run. Older artifacts without the Management hub cannot use this opt-in split, but retain their original Default-only behavior. Java and Swift tests connect through the local test server. The JavaScript WebPubSub chat client tests target **Azure Web PubSub** through their own local negotiate server and are **skipped** when `E2E_WEBPUBSUB_CHAT_CONNECTION_STRING` is not set; older artifacts without the selective retry runner still use `npm test`. The JavaScript WebPubSub Socket.IO extension tests reuse the SDK's own mocha suite against **Azure Web PubSub** (requires an `eio_hub` hub) and are **skipped** when `E2E_WEBPUBSUB_SOCKETIO_CONNECTION_STRING` is not set.
 
 ## CI Workflows
 
@@ -144,3 +149,6 @@ Triggered by every push to `master`, daily at 00:00 UTC, or manually.
 
 - **Re-run a failed test**: Click a badge above → open the failed run → **Re-run failed jobs**.
 - **Manually trigger**: Click a badge above → **Run workflow**.
+
+The macOS Swift job selects the Swift 6.0 toolchain already included in Xcode 16.2 on the `macos-14` runner. The Stable SDK build rebuilds artifacts when the test harness changes, even if stable SDK versions have not changed.
+To test a feature branch, manually run both Client E2E workflows on that branch with **Force rebuild** enabled. These runs upload test artifacts and report results, but only runs on `master` publish releases or update badges.

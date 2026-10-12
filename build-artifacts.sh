@@ -131,7 +131,7 @@ ok "JavaScript WebPubSub chat client tests → $OUTPUT_DIR/webpubsub/javascript/
 # The Socket.IO extension E2E suite is the SDK's own test suite (the exact one
 # run by Azure/azure-webpubsub's "Socket.IO E2E test" pipeline). It is a real
 # Socket.IO server backed by Azure Web PubSub, exercised by real socket.io
-# clients through the service, run with mocha + ts-node.
+# clients through the service, run with Mocha + tsx.
 # Version source is selected via JAVASCRIPT_SOCKETIO_SDK_SOURCE:
 #   submodule (default) → build @azure/web-pubsub-socket.io from the webpubsub
 #                         submodule (dev): build server-proxies + the extension,
@@ -162,6 +162,11 @@ JAVASCRIPT_SOCKETIO_SDK_SOURCE="${JAVASCRIPT_SOCKETIO_SDK_SOURCE:-submodule}"
       npm run build
     )
     TARBALL=$(cd "$EXT_DIR" && npm pack | tail -1)
+    # The extension patches its own socket.io Server prototype. The test suite
+    # must load the same socket.io installation, not a second pinned version.
+    SOCKET_IO_RANGE=$(node -p 'require(process.argv[1]).dependencies["socket.io"]' "$EXT_DIR/package.json")
+    SOCKET_IO_CLIENT_RANGE=$(node -p 'require(process.argv[1]).devDependencies["socket.io-client"]' "$EXT_DIR/package.json")
+    npm pkg set "dependencies[socket.io]=$SOCKET_IO_RANGE" "devDependencies[socket.io-client]=$SOCKET_IO_CLIENT_RANGE"
     log "  Socket.IO extension SDK: installing packed tarball $TARBALL"
     npm install "$EXT_DIR/$TARBALL" --no-save --no-audit --no-fund
   else
@@ -173,6 +178,15 @@ JAVASCRIPT_SOCKETIO_SDK_SOURCE="${JAVASCRIPT_SOCKETIO_SDK_SOURCE:-submodule}"
       log "  Socket.IO extension SDK: using version pinned in webpubsub/javascript/socketio/package.json (stable)"
     fi
   fi
+  node -e '
+    const path = require("path");
+    const sdk = require.resolve("@azure/web-pubsub-socket.io");
+    const sdkSocketIO = require.resolve("socket.io", { paths: [path.dirname(sdk)] });
+    const testSocketIO = require.resolve("socket.io");
+    if (sdkSocketIO !== testSocketIO) {
+      throw new Error(`Socket.IO tests and SDK load different copies: ${testSocketIO} vs ${sdkSocketIO}`);
+    }
+  '
 )
 # Copy the SDK's own test suite from the submodule (single source of truth) and
 # rewrite its SDK-source imports to the package name.
